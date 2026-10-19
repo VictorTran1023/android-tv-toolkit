@@ -18,13 +18,13 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Build debug APK
-        working-directory: hud
-        run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon --stacktrace
+      - name: Build APK without Gradle
+        run: bash hud/build-ci.sh
 
       - uses: actions/upload-artifact@v4
         with:
           name: tvhud-debug
-          path: hud/app/build/outputs/apk/debug/app-debug.apk
+          path: hud/build-out/tvhud.apk
+
 
 
