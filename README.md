@@ -7,6 +7,8 @@
 [![ABI](https://img.shields.io/badge/ABI-armeabi--v7a-orange)]()
 [![Chip](https://img.shields.io/badge/SoC-MediaTek%20MT5879-blue)]()
 
+**中文** | [English](README.en.md)
+
 ---
 
 ## 这份文档适合谁
@@ -283,6 +285,13 @@ https://github.com/chen08209/FlClash/releases
 ```
 
 安装方式同第 6 节。
+
+实机截图（敏感信息已打码）：
+
+| | |
+| --- | --- |
+| ![FlClash 仪表盘](docs/images/flclash-dashboard.png) | ![FlClash 代理页](docs/images/flclash-proxies.png) |
+| 仪表盘：运行状态、出站模式、服务健康度 | 代理页：策略组与节点列表（右上角推广节点已打码） |
 
 ### 7.2 导入订阅：用深链，别用键盘
 
