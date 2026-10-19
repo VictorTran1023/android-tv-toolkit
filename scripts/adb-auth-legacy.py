@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
-"""用「传统二进制格式」公钥向 Android 设备请求 ADB 授权。
+"""Authorize ADB using the legacy binary public-key encoding.
 
-某些厂商深度定制的 adbd（如 TCL 电视）只认老格式公钥，
-而 adb 34+ 发送的是 base64 新格式，导致设备解析失败、直接拒绝、**永不弹窗**。
-本脚本手工握手并用传统格式发送公钥，同时保持连接等待用户确认。
+Some vendor-patched adbd implementations (notably TCL TVs) only parse the legacy
+RSA structure, while adb 34+ sends a 712-byte base64 blob. The device fails to
+parse it, rejects the request, and never shows the authorization dialog.
 
-传统格式 payload:
-    uint32 LE 模数长度 | 模数(大端) | uint32 LE 指数 | "user@host\\0"
+This script performs the handshake manually, sends the legacy payload, and keeps
+the TCP connection open while the user approves on the device.
 
-用法:
+Payload layout:
+    uint32 LE modulus length | modulus (big-endian) | uint32 LE exponent | "host@host\\0"
+
+Usage:
     python adb-auth-legacy.py --host 192.168.1.100
     python adb-auth-legacy.py --host 192.168.1.100 --port 5555 --wait 180
 """
@@ -28,7 +31,7 @@ A_STLS = 0x534C5453
 
 def read_pem(path):
     lines = open(path, "r", encoding="utf-8").read().splitlines()
-    b64 = "".join(l for l in lines if not l.startswith("-----") and l.strip())
+    b64 = "".join(line for line in lines if not line.startswith("-----") and line.strip())
     return base64.b64decode(b64)
 
 

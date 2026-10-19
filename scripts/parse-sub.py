@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""解析 v2ray 订阅，列出每个节点的协议与加密方式。
+"""Parse a v2ray subscription and report each node's protocol and security layer.
 
-作用：快速识别订阅里混进来的「明文节点」（security=none）。
-新版 Xray 核心会拒绝连接明文节点，但机场常把"剩余流量""到期时间"
-伪装成节点塞进列表，容易误点。
+Primary use: detect plaintext nodes (`security=none`) that modern Xray cores refuse
+to use. Providers often inject billing entries ("traffic left", "expiry date")
+disguised as nodes, which are easy to select by mistake.
 
-只输出节点名 / 协议 / 加密 / 传输 / 端口，**不打印 UUID、公钥等凭据**。
+Credentials (UUID, public keys) are never printed.
 
-用法:
+Usage:
     python parse-sub.py "https://example.com/link/TOKEN?sub=3"
     python parse-sub.py "https://..." --out report.txt
 """

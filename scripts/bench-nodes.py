@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""逐节点测吞吐：起一个临时 sing-box 实例（本地 mixed 代理），跑真实下载测速。
+"""Measure per-node throughput through a temporary sing-box instance.
 
-支持单流 / 多流并发，用来区分「节点总带宽」和「单条连接能跑多少」。
-RTT 大的线路单流会被 TCP 窗口限制，多流才能压出真实带宽。
+Runs a local mixed proxy per node and downloads a fixed-size payload, optionally
+over several parallel connections. The distinction matters: a high-RTT single
+connection is window-limited (BDP), so aggregate and per-stream figures differ.
 
-依赖: sing-box 可执行文件（https://github.com/SagerNet/sing-box/releases）
-用法:
+Requires a sing-box binary: https://github.com/SagerNet/sing-box/releases
+
+Usage:
     python bench-nodes.py "https://example.com/link/TOKEN?sub=3" --singbox ./sing-box
     python bench-nodes.py "https://..." --singbox ./sing-box --streams 4
 """

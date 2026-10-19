@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""静态分析 APK：ABI、内核类型、TV 适配、关键权限。
+"""Static APK analysis: ABI, core engine, TV support, notable permissions.
 
-用途：判断一个 APK 能不能装在 32 位电视上、是 Flutter/原生、用的是
-Xray/sing-box/mihomo 哪个内核、有没有 LEANBACK（TV 桌面）入口。
+Answers the questions that decide whether an APK fits a 32-bit TV:
+which ABIs it ships, whether it is Flutter/native, which proxy core it embeds
+(Xray / sing-box / mihomo), and whether it declares a LEANBACK entry point.
 
-不安装、不运行，纯解包读取。
+Nothing is installed or executed; the archive is only read.
 
-用法:
+Usage:
     python analyze-apk.py app.apk
 """
 import argparse
@@ -52,7 +53,7 @@ def main():
     print("\n== 内核 / 框架 ==")
     for lib in libs:
         print("  %-26s %s" % (lib, CORE_MARKERS.get(lib, "")))
-    if not any(l in CORE_MARKERS for l in libs):
+    if not any(lib in CORE_MARKERS for lib in libs):
         print("  （未见明显的代理内核库）")
 
     # 从二进制 manifest 里提取字符串
