@@ -116,7 +116,16 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        HudState.uiOpen = true;
         refresh();
     }
+
+    @Override
+    protected void onPause() {
+        HudState.uiOpen = false;
+        super.onPause();
+    }
 }
+
+
 

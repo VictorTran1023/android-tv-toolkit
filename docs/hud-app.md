@@ -4,7 +4,7 @@
 
 | 组件 | 说明 |
 | --- | --- |
-| **状态条** | 顶部 56 dp 悬浮窗：时间、VPN、CPU、热状态、↓↑ 吞吐；默认展示 **10 秒** 后淡出 |
+| **状态条** | 顶部 64 dp 悬浮窗：时间、VPN、CPU、热状态、↓↑ 吞吐；默认展示 **10 秒** 后淡出 |
 | **时钟屏保** | `DreamService`，替换厂商的广告画报 |
 | **设置页 / 预览页** | 开关状态条、悬浮窗授权入口、屏保预览 |
 
@@ -15,10 +15,10 @@
 
 ## 设计取舍
 
-- **左对齐紧凑布局**：所有内容控制在左侧 ~700 px 内，不覆盖 TCL 顶栏的标签与右上角图标。
+- **左对齐紧凑布局**：所有内容控制在左侧 ~700 px 内，不覆盖 TCL 顶栏的标签与右上角图标。时间使用细字重，CPU 带进度条，温度带温度计图标。
 - **不伪造数据**：Android 11 / MTK 上普通应用读不到 `sysfs_thermal` 与 Mali 占用，所以状态条只显示 `PowerManager.getCurrentThermalStatus()` 的「正常 / 偏热 / 降频」，不显示具体温度与 GPU 百分比。
 - **不拦截按键**：悬浮窗 `FLAG_NOT_FOCUSABLE | FLAG_NOT_TOUCHABLE`，不会抢遥控器焦点。
-- **10 秒 peek**：服务启动、屏幕唤醒、前台应用切换时出现，10 秒后自动淡出；设置页有「显示 10 秒」按钮可手动唤出。
+- **屏保视觉**：细字重大时钟、日期、四组状态（VPN / CPU / 热状态 / 内存）、双色环境光；时钟按分钟做 ±8 px 漂移，减少烧屏。\n- **10 秒 peek**：服务启动、屏幕唤醒、前台应用切换时出现，10 秒后自动淡出；设置页有「显示 10 秒」按钮可手动唤出。
 - **熄屏隐藏**：`PowerManager.isInteractive()` 为 false 时立即隐藏。
 
 ---
@@ -92,4 +92,5 @@ adb shell am start-foreground-service -n com.victor.tvhud/.HudService --es actio
 adb uninstall com.victor.tvhud
 adb shell settings put secure screensaver_components com.tcl.appreciate.art/.service.screensaver.ScreenSaverBootService
 ```
+
 
