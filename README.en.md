@@ -1,8 +1,8 @@
 <div align="center">
 
-# TCL TV ADB Unlock & Proxy Setup
+# TCL TV Debugging & Optimization Handbook
 
-ADB authorization · Sideloading · Proxy chain · YouTube playback
+ADB authorization · Sideloading · Proxy · Debloat · Low load · HUD · Regression tests
 
 ![Platform](https://img.shields.io/badge/Android%20TV-9%2B-3DDC84?logo=android&logoColor=white&style=flat-square)
 ![Scope](https://img.shields.io/badge/Scope-China--market%20firmware-F5A623?style=flat-square)
@@ -22,6 +22,8 @@ ADB authorization · Sideloading · Proxy chain · YouTube playback
 - Anyone stuck at `adb unauthorized` where the TV **never shows the authorization dialog**
 - People who want to sideload apps and configure a proxy **without root or flashing**
 - Readers who need a **reproducible troubleshooting path**, not scattered commands
+- Owners dealing with ad-heavy home screens, standby heat or battery drain
+- Anyone who wants VPN / CPU / temperature status **without replacing the launcher**
 
 ## Not covered
 
@@ -59,6 +61,10 @@ adb connect <TV_IP>:5555
 adb devices -l
 
 python scripts/parse-sub.py "<SUBSCRIPTION_URL>"
+
+# optional: snapshot before tuning, regression after
+powershell -File scripts/preflight.ps1
+powershell -File scripts/regress.ps1
 ```
 
 ## Contents
@@ -74,7 +80,10 @@ python scripts/parse-sub.py "<SUBSCRIPTION_URL>"
 | 7 | [YouTube](#7-youtube) | options without GMS |
 | 8 | [Playback tuning](#8-playback-tuning) | codecs and stutter diagnosis |
 | 9 | [Troubleshooting](#9-troubleshooting) | common failures |
-| 10 | [Scripts](#10-scripts) | four CLI utilities |
+| 10 | [Scripts](#10-scripts) | four CLI utilities + three PowerShell scripts |
+| 11 | [System tuning](#11-system-tuning) | ads, load, gated rollout |
+| 12 | [Status HUD](#12-status-hud--clock-screensaver) | overlay and screensaver without touching the launcher |
+| 13 | [Regression tests](#13-regression-tests) | 15 automated checks |
 
 ---
 
@@ -391,8 +400,87 @@ figure.
 | [`parse-sub.py`](scripts/parse-sub.py) | subscription parser and plaintext-node detector |
 | [`bench-nodes.py`](scripts/bench-nodes.py) | node throughput benchmark (single / parallel) |
 | [`analyze-apk.py`](scripts/analyze-apk.py) | APK static analysis: ABI, core, TV support |
+| [`preflight.ps1`](scripts/preflight.ps1) | snapshot packages, settings and props before changing anything |
+| [`restore-all.ps1`](scripts/restore-all.ps1) | undo every change using that snapshot |
+| [`regress.ps1`](scripts/regress.ps1) | 15 regression checks with screenshots and PASS/FAIL |
 
 Requires Python 3.9+ and `adb`; benchmarking additionally requires `sing-box`.
+
+---
+
+## 11. System tuning
+
+A sluggish China-market TV is usually not short of hardware — it is running preloaded components
+you never asked for. On a TCL T7K (Android 11 / MT5879 / 3.83 GB), a read-only audit found:
+
+**`com.tcl.walleve` (the voice assistant) kept about 53% of one core busy while the launcher sat
+idle**, running far-field wake-word detection (`CAE_LOG` / `IvwPreWakeupCallBack`) and holding an
+`AudioIn` wake lock. After disabling it and rebooting, the launcher, remote, Settings and apps all
+worked; nine minutes later the package was still disabled, CPU dropped from 48% to 9%, and the
+SoC went from 87 °C to 71–77 °C.
+
+| Tier | Targets | Action |
+| --- | --- | --- |
+| A no risk | animation scales | `settings put` to 0.5 |
+| B low risk | boot ad, OTA, promo rows, unused preloads | `pm disable-user`, restore with `install-existing` |
+| C medium | cleaner, short-video, VOD, screensaver | confirm one by one |
+| D never | launcher, Settings, systemserver, factory menu, BT pairing | leave alone |
+
+**Gated rollout**: snapshot → animations → disable → **reboot and verify** → regression. Every
+step is reversible; real bricks require flashing partitions, which this repo never does.
+
+```powershell
+$env:TV_IP = "<TV_IP>"
+.\scripts\preflight.ps1
+adb shell pm disable-user --user 0 com.tcl.walleve
+adb shell reboot
+.\scripts\regress.ps1
+```
+
+Full measurements and reproduction commands: **[docs/t7k-optimization.md](docs/t7k-optimization.md)**.
+
+![Optimization roadmap](docs/images/optimization-roadmap.png)
+
+---
+
+## 12. Status HUD & clock screensaver
+
+Without replacing the launcher or rooting, you can still put a professional status strip on top
+of any picture: VPN node and latency, CPU, temperature, RAM and throughput. It is an overlay app
+(`TYPE_APPLICATION_OVERLAY`) plus a `DreamService` that replaces the ad-filled screensaver.
+
+What is actually readable on Android 11 / MTK:
+
+| Metric | Available | Note |
+| --- | --- | --- |
+| CPU / memory / network / VPN / thermal status | ✅ | system APIs and `/proc` |
+| SoC temperature °C | ⚠️ Shizuku only | `sysfs_thermal` is denied even to shell |
+| GPU utilisation % | ❌ | `mali0/gpuinfo` denied; no GED or devfreq node |
+
+Design specs, permissions, implementation and rollback: **[docs/hud-design.md](docs/hud-design.md)**.
+
+![Status strip](docs/images/hud-strip.png)
+![Diagnostics panel](docs/images/hud-panel.png)
+![Clock screensaver](docs/images/clock-screensaver.png)
+
+---
+
+## 13. Regression tests
+
+Run it after every change, reboot or firmware update to prove the everyday paths still work:
+boot, launcher, HOME key, D-pad, Settings, a video app, Wi-Fi, outbound network, critical
+packages, crashes and ANRs.
+
+```powershell
+$env:TV_IP = "<TV_IP>"
+.\scripts\regress.ps1
+```
+
+- 15 checks, roughly 40 seconds, ends on the home screen
+- `0 FAIL` means pass; on failure run `.\scripts\restore-all.ps1` and retest
+- evidence lands in `audit/regress/<timestamp>/`
+
+Checklist and the screenshot-diff trick for the remote: **[docs/regression.md](docs/regression.md)**.
 
 ---
 
@@ -404,3 +492,4 @@ risk and subject to local law. No nodes, accounts or subscription links are prov
 ## License
 
 [MIT](LICENSE)
+

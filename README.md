@@ -1,8 +1,8 @@
 <div align="center">
 
-# TCL 电视 ADB 解锁与代理配置
+# TCL 电视调试与优化手册
 
-ADB 授权 · 侧载应用 · 代理链路 · YouTube 播放
+ADB 授权 · 侧载 · 代理 · 去广告 · 低负载 · HUD · 回归测试
 
 ![Platform](https://img.shields.io/badge/Android%20TV-9%2B-3DDC84?logo=android&logoColor=white&style=flat-square)
 ![Scope](https://img.shields.io/badge/Scope-China--market%20firmware-F5A623?style=flat-square)
@@ -21,6 +21,8 @@ ADB 授权 · 侧载应用 · 代理链路 · YouTube 播放
 - 使用 **国行 TCL / 雷鸟 等安卓电视**，系统受限、无法安装第三方应用
 - 卡在 `adb unauthorized`，且电视端**始终不弹授权框**
 - 希望在不 root、不刷机的前提下侧载应用、配置代理、稳定播放
+- 首页广告多、待机发热耗电，想做**可回滚的减法**
+- 想在不换桌面的前提下，看到 VPN / CPU / 温度等**系统状态**
 - 需要一套**可复现的排查路径**，而不是零散的命令片段
 
 ## 不适用
@@ -59,6 +61,10 @@ adb connect <TV_IP>:5555
 adb devices -l
 
 python scripts/parse-sub.py "<SUBSCRIPTION_URL>"
+
+# 可选：优化前先做快照，改完跑回归
+powershell -File scripts/preflight.ps1
+powershell -File scripts/regress.ps1
 ```
 
 ## 目录
@@ -74,7 +80,10 @@ python scripts/parse-sub.py "<SUBSCRIPTION_URL>"
 | 7 | [YouTube](#7-youtube) | 无 GMS 环境下的方案 |
 | 8 | [播放调优](#8-播放调优) | 解码能力与卡顿定位 |
 | 9 | [故障速查](#9-故障速查) | 典型故障对照 |
-| 10 | [脚本](#10-脚本) | 四个 CLI 工具 |
+| 10 | [脚本](#10-脚本) | 四个 CLI 工具 + 三个 PowerShell 脚本 |
+| 11 | [系统优化](#11-系统优化去广告与降负载) | 去广告、降负载、闸门式执行 |
+| 12 | [状态 HUD](#12-状态-hud-与时钟屏保) | 不换桌面的状态条与屏保 |
+| 13 | [回归测试](#13-回归测试) | 15 项自动检查 |
 
 ---
 
@@ -377,8 +386,77 @@ adb shell "grep -o 'name=\"[^\"]*\"' /vendor/etc/media_codecs.xml"
 | [`parse-sub.py`](scripts/parse-sub.py) | 订阅解析与明文节点检测 |
 | [`bench-nodes.py`](scripts/bench-nodes.py) | 节点吞吐测试（单流 / 多流） |
 | [`analyze-apk.py`](scripts/analyze-apk.py) | APK 静态分析：ABI、内核、TV 适配 |
+| [`preflight.ps1`](scripts/preflight.ps1) | 改动前快照（包、设置、属性、动画、屏保） |
+| [`restore-all.ps1`](scripts/restore-all.ps1) | 一键回滚到快照状态 |
+| [`regress.ps1`](scripts/regress.ps1) | 15 项回归检查，输出截图与 PASS/FAIL |
 
 依赖 Python 3.9+ 与 `adb`；测速另需 `sing-box`。
+
+---
+
+## 11. 系统优化：去广告与降负载
+
+国行固件的「卡」通常不是硬件不够，而是预装组件一直在跑。以一台 TCL T7K（Android 11 / MT5879 / 3.83 GB）为例，只读体检发现：
+
+**`com.tcl.walleve`（小T助手）在桌面静止时占用约 53% 单核**，日志显示它在持续跑远场语音唤醒（`CAE_LOG` / `IvwPreWakeupCallBack`），并持有 `AudioIn` 唤醒锁；实测停用后重启，桌面、遥控、设置、应用全部正常，9 分钟后仍未恢复，CPU 从 48% 降到 9%，温度从 87 °C 降到 71–77 °C。
+
+| 级别 | 对象 | 处理 |
+| --- | --- | --- |
+| A 零风险 | 动画缩放 | `settings put` 调 0.5 |
+| B 低风险 | 开机广告、OTA、推广位、不用的预装 | `pm disable-user` / `install-existing` 恢复 |
+| C 中风险 | 电视卫士、短视频、点播、屏保 | 逐项确认 |
+| D 禁止 | 桌面、设置、systemserver、工厂菜单、蓝牙配对等 | 不碰 |
+
+**闸门式执行**：快照 → 动画 → 停用 → **重启验证** → 回归。每一步都可回滚，真砖需要写 bootloader / 系统镜像，这里全程不涉及。
+
+```powershell
+$env:TV_IP = "<TV_IP>"
+.\scripts\preflight.ps1
+adb shell pm disable-user --user 0 com.tcl.walleve
+adb shell reboot
+.\scripts\regress.ps1
+```
+
+完整数据、证据与复现命令见 **[docs/t7k-optimization.md](docs/t7k-optimization.md)**。
+
+![优化路线](docs/images/optimization-roadmap.png)
+
+---
+
+## 12. 状态 HUD 与时钟屏保
+
+不换桌面、不 root，也能在任意画面顶部加一条专业状态栏：VPN 节点与延迟、CPU、温度、内存、网络。做法是一个悬浮窗 App（`TYPE_APPLICATION_OVERLAY`），外加一个 `DreamService` 替换广告画报。
+
+实测可得性：
+
+| 指标 | 能否 | 备注 |
+| --- | --- | --- |
+| CPU / 内存 / 网络 / VPN / 热状态 | ✅ | 系统 API 与 `/proc` |
+| 芯片温度 °C | ⚠️ 仅 Shizuku | `sysfs_thermal` 连 shell 都拒绝 |
+| GPU 占用 % | ❌ | `mali0/gpuinfo` 权限拒绝，无 GED/devfreq 节点 |
+
+设计规范、权限、实现路径与回滚见 **[docs/hud-design.md](docs/hud-design.md)**。
+
+![状态条](docs/images/hud-strip.png)
+![诊断面板](docs/images/hud-panel.png)
+![时钟屏保](docs/images/clock-screensaver.png)
+
+---
+
+## 13. 回归测试
+
+改动、重启、系统升级后跑一遍，确认「日常必须能用」的路径没有回归：开机、桌面、Home 键、遥控焦点、设置、视频 App、Wi-Fi、外网、关键系统包、崩溃与 ANR。
+
+```powershell
+$env:TV_IP = "<TV_IP>"
+.\scripts\regress.ps1
+```
+
+- 15 项检查，约 40 秒，结束时回到桌面
+- `0 FAIL` 即通过；异常先 `.\scripts\restore-all.ps1` 再复测
+- 证据在 `audit/regress/<时间戳>/`
+
+检查项、判定标准与截图差分的实现细节见 **[docs/regression.md](docs/regression.md)**。
 
 ---
 
@@ -390,3 +468,5 @@ adb shell "grep -o 'name=\"[^\"]*\"' /vendor/etc/media_codecs.xml"
 ## License
 
 [MIT](LICENSE)
+
+

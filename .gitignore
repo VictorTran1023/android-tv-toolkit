@@ -21,3 +21,8 @@ sub-report.txt
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Local snapshots and regression evidence
+backup/
+audit/
+
