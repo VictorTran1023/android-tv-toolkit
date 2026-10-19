@@ -1,16 +1,16 @@
 <div align="center">
 
-# TCL Android TV Toolkit
+# TCL 电视 ADB 解锁与代理配置
 
-局域网发现 · ADB 授权 · 侧载安装 · 代理链路 · 播放调优
+ADB 授权 · 侧载应用 · 代理链路 · YouTube 播放
 
 ![Platform](https://img.shields.io/badge/Android%20TV-9%2B-3DDC84?logo=android&logoColor=white&style=flat-square)
 ![Scope](https://img.shields.io/badge/Scope-China--market%20firmware-F5A623?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white&style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-8E8E93?style=flat-square)
-![CI](https://github.com/VictorTran1023/tcl-tv-guide/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/VictorTran1023/tcl-tv-adb-proxy/actions/workflows/ci.yml/badge.svg)
 
-[中文](README.md) · [English](README.en.md) · [Discussions](https://github.com/VictorTran1023/tcl-tv-guide/discussions)
+[中文](README.md) · [English](README.en.md) · [Discussions](https://github.com/VictorTran1023/tcl-tv-adb-proxy/discussions)
 
 </div>
 
@@ -52,8 +52,8 @@
 ## 快速开始
 
 ```bash
-git clone https://github.com/VictorTran1023/tcl-tv-guide.git
-cd tcl-tv-guide
+git clone https://github.com/VictorTran1023/tcl-tv-adb-proxy.git
+cd tcl-tv-adb-proxy
 
 adb connect <TV_IP>:5555
 adb devices -l
@@ -70,7 +70,7 @@ python scripts/parse-sub.py "<SUBSCRIPTION_URL>"
 | 3 | [开启 ADB](#3-开启-adb) | 厂商入口路径 |
 | 4 | [授权突破](#4-授权突破) | 传统公钥握手 |
 | 5 | [侧载安装](#5-侧载安装) | 绕过安装校验 |
-| 6 | [代理客户端](#6-代理客户端) | 客户端选型与订阅导入 |
+| 6 | [代理客户端](#6-代理客户端) | FlClash 与订阅导入 |
 | 7 | [YouTube](#7-youtube) | 无 GMS 环境下的方案 |
 | 8 | [播放调优](#8-播放调优) | 解码能力与卡顿定位 |
 | 9 | [故障速查](#9-故障速查) | 典型故障对照 |
@@ -238,17 +238,25 @@ adb shell am start -n com.dangbeimarket/.ui.apkmanager.ApkManagerActivity
 
 ## 6. 代理客户端
 
-| 客户端 | 内核 | 界面形态 | 遥控器适配 |
-| --- | --- | --- | --- |
-| v2rayNG | Xray | 手机布局，悬浮按钮不可聚焦 | 需鼠标或投屏 |
-| FlClash | mihomo | 平板式侧栏，卡片式列表 | 可聚焦操作 |
-| 服务商客户端 | sing-box | 多为 Flutter 手机布局 | 视实现而定 |
+[FlClash](https://github.com/chen08209/FlClash) 是基于 mihomo 内核的开源客户端，
+支持 VLESS / VMess / Trojan / Hysteria2 等协议，在 Android TV 上可用遥控器直接操作。
 
-按设备 ABI 选择构建：
+| 项目 | 说明 |
+| --- | --- |
+| 项目地址 | https://github.com/chen08209/FlClash |
+| 内核 | mihomo（Clash Meta） |
+| 界面 | 平板式侧栏 + 卡片列表，D-pad 可聚焦 |
+| 订阅 | 支持链接导入与自动更新 |
+| 授权 | 开源 |
 
-```
-https://github.com/chen08209/FlClash/releases
-```
+**下载**
+
+前往 [Releases](https://github.com/chen08209/FlClash/releases) 选择与设备 ABI 对应的构建：
+
+| ABI | 文件 |
+| --- | --- |
+| 32 位 | `FlClash-*-android-armeabi-v7a.apk` |
+| 64 位 | `FlClash-*-android-arm64-v8a.apk` |
 
 | 仪表盘 | 代理页 |
 | --- | --- |

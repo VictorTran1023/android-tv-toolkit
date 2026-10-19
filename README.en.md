@@ -1,16 +1,16 @@
 <div align="center">
 
-# TCL Android TV Toolkit
+# TCL TV ADB Unlock & Proxy Setup
 
-LAN discovery · ADB authorization · Sideloading · Proxy chain · Playback tuning
+ADB authorization · Sideloading · Proxy chain · YouTube playback
 
 ![Platform](https://img.shields.io/badge/Android%20TV-9%2B-3DDC84?logo=android&logoColor=white&style=flat-square)
 ![Scope](https://img.shields.io/badge/Scope-China--market%20firmware-F5A623?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white&style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-8E8E93?style=flat-square)
-![CI](https://github.com/VictorTran1023/tcl-tv-guide/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/VictorTran1023/tcl-tv-adb-proxy/actions/workflows/ci.yml/badge.svg)
 
-[English](README.en.md) · [中文](README.md) · [Discussions](https://github.com/VictorTran1023/tcl-tv-guide/discussions)
+[English](README.en.md) · [中文](README.md) · [Discussions](https://github.com/VictorTran1023/tcl-tv-adb-proxy/discussions)
 
 </div>
 
@@ -52,8 +52,8 @@ Four problem classes and their causes:
 ## Quick start
 
 ```bash
-git clone https://github.com/VictorTran1023/tcl-tv-guide.git
-cd tcl-tv-guide
+git clone https://github.com/VictorTran1023/tcl-tv-adb-proxy.git
+cd tcl-tv-adb-proxy
 
 adb connect <TV_IP>:5555
 adb devices -l
@@ -70,7 +70,7 @@ python scripts/parse-sub.py "<SUBSCRIPTION_URL>"
 | 3 | [Enabling ADB](#3-enabling-adb) | vendor entry paths |
 | 4 | [Authorization](#4-authorization) | legacy public-key handshake |
 | 5 | [Sideloading](#5-sideloading) | bypassing the install verifier |
-| 6 | [Proxy client](#6-proxy-client) | client selection and subscription import |
+| 6 | [Proxy client](#6-proxy-client) | FlClash and subscription import |
 | 7 | [YouTube](#7-youtube) | options without GMS |
 | 8 | [Playback tuning](#8-playback-tuning) | codecs and stutter diagnosis |
 | 9 | [Troubleshooting](#9-troubleshooting) | common failures |
@@ -243,17 +243,26 @@ foreground app initiating the install so the system can show its confirmation di
 
 ## 6. Proxy client
 
-| Client | Core | UI form | Remote support |
-| --- | --- | --- | --- |
-| v2rayNG | Xray | phone layout, floating button not focusable | needs mouse or mirroring |
-| FlClash | mihomo | tablet-style sidebar with card lists | focusable with D-pad |
-| Provider client | sing-box | usually Flutter phone layout | implementation dependent |
+[FlClash](https://github.com/chen08209/FlClash) is an open-source client built on the
+mihomo core. It supports VLESS / VMess / Trojan / Hysteria2 and is fully navigable with
+a TV remote.
 
-Pick the build matching the device ABI:
+| Item | Note |
+| --- | --- |
+| Repository | https://github.com/chen08209/FlClash |
+| Core | mihomo (Clash Meta) |
+| UI | tablet-style sidebar with card lists, D-pad focusable |
+| Subscription | link import with auto-update |
+| License | open source |
 
-```
-https://github.com/chen08209/FlClash/releases
-```
+**Download**
+
+Pick the build matching the device ABI from [Releases](https://github.com/chen08209/FlClash/releases):
+
+| ABI | File |
+| --- | --- |
+| 32-bit | `FlClash-*-android-armeabi-v7a.apk` |
+| 64-bit | `FlClash-*-android-arm64-v8a.apk` |
 
 | Dashboard | Proxies |
 | --- | --- |

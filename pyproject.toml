@@ -1,5 +1,5 @@
 [project]
-name = "tcl-tv-guide"
+name = "tcl-tv-adb-proxy"
 version = "0.1.0"
 description = "TCL Android TV toolkit: ADB authorization, sideloading, proxy chain, playback tuning"
 readme = "README.md"
