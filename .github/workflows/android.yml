@@ -1,0 +1,29 @@
+name: android
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "hud/**"
+      - ".github/workflows/android.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APK
+        run: gradle -p hud assembleDebug --no-daemon --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tvhud-debug
+          path: hud/app/build/outputs/apk/debug/app-debug.apk

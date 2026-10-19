@@ -26,3 +26,8 @@ Thumbs.db
 backup/
 audit/
 
+# Android build
+hud/.gradle/
+hud/**/build/
+*.apk
+
