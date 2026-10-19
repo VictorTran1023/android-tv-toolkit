@@ -1,0 +1,23 @@
+# 二进制与大文件
+*.apk
+*.apkm
+*.xapk
+*.zip
+*.7z
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 日志与临时产物
+*.log
+*.tmp
+sub-report.txt
+
+# 本地环境
+.env
+.vscode/
+.DS_Store
+Thumbs.db
