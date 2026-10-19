@@ -2,13 +2,13 @@
 
 # TCL Android TV Toolkit
 
-LAN discovery · ADB authorization · Sideloading · Proxy chain · Stable 1080p
+LAN discovery · ADB authorization · Sideloading · Proxy chain · Playback tuning
 
-![Platform](https://img.shields.io/badge/Android-11-3DDC84?logo=android&logoColor=white&style=flat-square)
-![ABI](https://img.shields.io/badge/ABI-armeabi--v7a-F5A623?style=flat-square)
-![SoC](https://img.shields.io/badge/SoC-MediaTek%20MT5879-0A84FF?style=flat-square)
+![Platform](https://img.shields.io/badge/Android%20TV-9%2B-3DDC84?logo=android&logoColor=white&style=flat-square)
+![Scope](https://img.shields.io/badge/Scope-China--market%20firmware-F5A623?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white&style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-8E8E93?style=flat-square)
+![CI](https://github.com/VictorTran1023/tcl-tv-guide/actions/workflows/ci.yml/badge.svg)
 
 [English](README.en.md) · [中文](README.md) · [Discussions](https://github.com/VictorTran1023/tcl-tv-guide/discussions)
 
@@ -16,26 +16,38 @@ LAN discovery · ADB authorization · Sideloading · Proxy chain · Stable 1080p
 
 ---
 
-## Overview
+## Who this is for
 
-| Item | Value |
+- Owners of a **China-market TCL / FFALCON Android TV** with a restricted system
+- Anyone stuck at `adb unauthorized` where the TV **never shows the authorization dialog**
+- People who want to sideload apps and configure a proxy **without root or flashing**
+- Readers who need a **reproducible troubleshooting path**, not scattered commands
+
+## Not covered
+
+| Scope | Note |
 | --- | --- |
-| Model | TCL T7K |
-| SoC | MediaTek MT5879 (4-core ARMv8) |
-| OS | Android 11 / SDK 30 |
-| Architecture | 64-bit SoC, **32-bit userspace** |
-| Panel | 3840×2160 / HDR10 |
-| Decoding | AVC · HEVC · VP9 · AV1 · VVC · Dolby Vision |
-| Status | ADB, sideloading, proxy and YouTube verified end-to-end |
+| root / system partition modification / flashing | out of scope |
+| Proxy nodes, accounts, subscriptions | bring your own |
+| Non-Android TV platforms | webOS, Tizen, Roku are not applicable |
 
-Four problems, four root causes:
+## Scope
 
-| Problem | Root cause | Solution |
-| --- | --- | --- |
-| Can't connect | Incompatible public-key encoding | Legacy handshake |
-| Can't install | TCL-patched PMS rejects silently | Install through a UI path |
-| Can't navigate | UI not designed for a remote | Pick a TV-friendly client |
-| Can't play | Bitrate exceeds bandwidth | Cap quality, choose node |
+| Item | Note |
+| --- | --- |
+| OS | Android TV 9 and above |
+| Architecture | 32-bit (`armeabi-v7a`) or 64-bit — verify first |
+| Devices | TCL / FFALCON used as reference; the method applies to most China-market Android TVs |
+| Prerequisite | TV and PC on the same LAN |
+
+Four problem classes and their causes:
+
+| Symptom | Cause |
+| --- | --- |
+| Cannot connect | public-key encoding incompatible with the vendor adbd |
+| Cannot install | vendor-patched PMS blocks non-interactive installs |
+| Cannot navigate | app UI not designed for a remote |
+| Cannot play | bitrate exceeds available bandwidth |
 
 ## Quick start
 
@@ -47,23 +59,22 @@ adb connect <TV_IP>:5555
 adb devices -l
 
 python scripts/parse-sub.py "<SUBSCRIPTION_URL>"
-python scripts/bench-nodes.py "<SUBSCRIPTION_URL>" --singbox /path/to/sing-box
 ```
 
 ## Contents
 
 | # | Section | Scope |
 | --- | --- | --- |
-| 1 | [Environment](#1-environment) | ABI, SoC, kernel bitness |
+| 1 | [Environment](#1-environment) | ABI, kernel bitness, decoding capability |
 | 2 | [LAN discovery](#2-lan-discovery) | ARP sweep, SSDP, mDNS |
-| 3 | [Enabling ADB](#3-enabling-adb) | TCL-specific path |
-| 4 | [Authorization](#4-authorization) | Legacy public-key handshake |
-| 5 | [Sideloading](#5-sideloading) | Bypassing the install verifier |
-| 6 | [Proxy client](#6-proxy-client) | FlClash and subscription import |
-| 7 | [YouTube](#7-youtube) | SmartTube and playback settings |
-| 8 | [Performance](#8-performance) | Decoding capability and measurements |
-| 9 | [Troubleshooting](#9-troubleshooting) | Nine common failure modes |
-| 10 | [Scripts](#10-scripts) | Four CLI utilities |
+| 3 | [Enabling ADB](#3-enabling-adb) | vendor entry paths |
+| 4 | [Authorization](#4-authorization) | legacy public-key handshake |
+| 5 | [Sideloading](#5-sideloading) | bypassing the install verifier |
+| 6 | [Proxy client](#6-proxy-client) | client selection and subscription import |
+| 7 | [YouTube](#7-youtube) | options without GMS |
+| 8 | [Playback tuning](#8-playback-tuning) | codecs and stutter diagnosis |
+| 9 | [Troubleshooting](#9-troubleshooting) | common failures |
+| 10 | [Scripts](#10-scripts) | four CLI utilities |
 
 ---
 
@@ -76,14 +87,11 @@ adb shell getprop ro.zygote
 adb shell uname -m
 ```
 
-Measured on the T7K:
-
-| Check | Value | Verdict |
-| --- | --- | --- |
-| `abilist` | `armeabi-v7a,armeabi` | 32-bit only |
-| `abilist64` | *empty* | no 64-bit support |
-| `zygote` | `zygote32` | 32-bit process model |
-| `uname -m` | `armv8l` | kernel runs in AArch32 |
+| Check | Interpretation |
+| --- | --- |
+| `abilist64` empty | pure 32-bit system; only `armeabi-v7a` APKs install |
+| `zygote32` | 32-bit process model |
+| `uname -m` reports `armv8l` | kernel runs in AArch32 |
 
 APKs shipping only `arm64-v8a` fail with `INSTALL_FAILED_NO_MATCHING_ABIS`.
 
@@ -91,7 +99,7 @@ APKs shipping only `arm64-v8a` fail with `INSTALL_FAILED_NO_MATCHING_ABIS`.
 
 ## 2. LAN discovery
 
-ICMP is frequently dropped. Force ARP resolution over TCP instead:
+ICMP is frequently dropped; force ARP resolution over TCP instead:
 
 ```powershell
 1..254 | ForEach-Object -Parallel {
@@ -104,7 +112,7 @@ ICMP is frequently dropped. Force ARP resolution over TCP instead:
 arp -a | Select-String '192\.168\.1\.'
 ```
 
-SSDP yields the model directly:
+SSDP exposes the model directly:
 
 ```powershell
 $msg = "M-SEARCH * HTTP/1.1`r`nHOST: 239.255.255.250:1900`r`nMAN: `"ssdp:discover`"`r`nMX: 2`r`nST: ssdp:all`r`n`r`n"
@@ -114,33 +122,36 @@ $b   = [Text.Encoding]::ASCII.GetBytes($msg)
 [void]$udp.Send($b, $b.Length, $ep)
 ```
 
-Device identifiers in `description.xml`:
+Device identifiers in the UPnP description:
 
 ```xml
-<modelName>tcl_mt5879_cn</modelName>
+<modelName>...</modelName>
 <X_brandName>TCL</X_brandName>
 <channelName>tcl</channelName>
 ```
 
-An mDNS TXT record `model=AppleTV3,2` on `_airplay._tcp.local` indicates AirPlay 2 support,
-so an iPhone or Mac can cast without any app.
+A TXT record `model=AppleTV3,2` on `_airplay._tcp.local` indicates AirPlay 2 support,
+so an iPhone or Mac can cast directly.
 
 ---
 
 ## 3. Enabling ADB
 
-```
-Settings → About → Device Info → remote: Up, Down, Left, Right
-```
+Entry points vary by vendor; two common patterns:
 
-An `ADB` toggle appears. It is the only entry in Developer options on this firmware.
+| Pattern | Path |
+| --- | --- |
+| Hidden toggle | Settings → About → Device Info → remote: Up, Down, Left, Right |
+| Developer mode | Settings → About → tap Build Number repeatedly |
 
-> The toggle resets on every power cycle by design.
+China-market firmware may expose only the ADB toggle, with no USB debugging and no
+authorization list.
+
+> The toggle typically resets on every power cycle.
 
 ```bash
 adb connect <TV_IP>:5555
 adb devices -l
-# <TV_IP>:5555  device  product:tcl_mt5879_cn_db  model:tcl_mt5879_cn
 ```
 
 ---
@@ -154,19 +165,21 @@ failed to authenticate to <TV_IP>:5555
 <TV_IP>:5555    unauthorized
 ```
 
-No authorization dialog ever appears.
+No authorization dialog appears on the TV.
 
 **Diagnosis**
+
+With adb server tracing enabled:
 
 ```
 [AUTH] arg0=1 (len=20)      device challenge
 [AUTH] arg0=2 (len=256)     signature
 [AUTH] arg0=1 (len=20)      rejected
-[AUTH] arg0=3 (len=712)     public key  ← base64, new encoding
+[AUTH] arg0=3 (len=712)     public key  ← base64 encoded
 ```
 
-adb 34+ sends a 712-byte base64 public key. This firmware's adbd only parses the legacy
-binary structure, fails, and rejects without ever prompting.
+adb 34+ sends a base64 public key; some vendor adbd implementations only parse the legacy
+binary structure, fail, and reject without prompting.
 
 **Fix**
 
@@ -180,7 +193,7 @@ The script sends the legacy structure and holds the connection open:
 uint32 LE modulus length | modulus (big-endian) | uint32 LE exponent | "host@host\0"
 ```
 
-After approval the key is stored in `adb_keys`; plain adb works thereafter.
+Once approved, the key is stored in `adb_keys` and plain adb works thereafter.
 
 > adb requires its private key at `~/.android/adbkey`. If that path is unwritable,
 > adb cannot sign and reports the same error.
@@ -196,6 +209,13 @@ adb install -r app.apk
 Failure [INSTALL_FAILED_VERIFICATION_FAILURE]
 ```
 
+Global verifier switches usually do not help:
+
+```bash
+adb shell settings put global verifier_verify_adb_installs 0
+adb shell settings put global package_verifier_enable 0
+```
+
 **Diagnosis**
 
 ```
@@ -203,30 +223,33 @@ D OverseasAppConfig: Verifying begin
 D OverseasAppConfig: pkgName = com.example.app
 ```
 
-The verifier lives in system_server (TCL-patched PackageManagerService). A non-interactive
-install has no UI to confirm, so the only outcome is rejection.
+The verifier lives in system_server, injected through a vendor-patched
+PackageManagerService. A non-interactive install has no UI for confirmation, so it
+can only fail.
 
 **Fix**
+
+Use an install path that has a UI:
 
 ```bash
 adb push app.apk /sdcard/Download/app.apk
 adb shell am start -n com.dangbeimarket/.ui.apkmanager.ApkManagerActivity
 ```
 
-Install from the TV-side app market. The system shows a risk-confirmation dialog that
-the user can accept.
+Any app market or file manager with an install UI works — the requirement is a
+foreground app initiating the install so the system can show its confirmation dialog.
 
 ---
 
 ## 6. Proxy client
 
-| Client | Core | TV usability | Verdict |
+| Client | Core | UI form | Remote support |
 | --- | --- | --- | --- |
-| v2rayNG | Xray | phone layout, FAB unreachable by D-pad | not recommended |
-| FlClash | mihomo | tablet-style sidebar, remote works | **recommended** |
-| Provider client | sing-box | Flutter phone layout, no LEANBACK | fallback |
+| v2rayNG | Xray | phone layout, floating button not focusable | needs mouse or mirroring |
+| FlClash | mihomo | tablet-style sidebar with card lists | focusable with D-pad |
+| Provider client | sing-box | usually Flutter phone layout | implementation dependent |
 
-Use the `armeabi-v7a` build:
+Pick the build matching the device ABI:
 
 ```
 https://github.com/chen08209/FlClash/releases
@@ -239,8 +262,8 @@ https://github.com/chen08209/FlClash/releases
 
 **Subscription import**
 
-The TV IME converts URLs into Chinese characters, so keyboard entry is not viable.
-Use the deep link:
+TV input methods tend to convert URLs into Chinese characters, so keyboard entry is
+not viable. Push the deep link instead:
 
 ```bash
 URL="https://example.com/link/TOKEN?clash=1"
@@ -248,24 +271,30 @@ ENC=$(python -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],sa
 adb shell "am start -a android.intent.action.VIEW -d 'clash://install-config?url=$ENC&name=main'"
 ```
 
-The URL is stored verbatim and can auto-update. File-based import loses that ability.
+The URL is stored verbatim, preserving subscription auto-update; file-based imports
+lose that ability.
 
 **Node selection**
 
-Proxies → policy group → node. The default may be a `security=none` plaintext node,
-which current cores refuse to use.
+Proxies → policy group → node. Some subscriptions default to a `security=none`
+plaintext node, which current cores refuse to use.
 
 ---
 
 ## 7. YouTube
 
-The official client depends on Google Play Services. China-market firmware ships no
-`com.google.*` packages, so it installs but cannot run.
+The official client relies on Google Play Services for account and playback
+authorization, so firmware without GMS cannot run it.
 
-Use [SmartTube](https://github.com/yuliskov/SmartTube/releases) — open source, no GMS,
-remote friendly.
+Options:
 
-Sign-in: the TV shows an activation code; enter it at `youtube.com/activate`.
+| Option | Note |
+| --- | --- |
+| [SmartTube](https://github.com/yuliskov/SmartTube/releases) | open-source client, no GMS, sign-in and remote support |
+| Web version | best compatibility, limited controls and quality |
+
+SmartTube sign-in: the TV displays an activation code; enter it at
+`youtube.com/activate`.
 
 **Video quality**
 
@@ -275,52 +304,57 @@ Settings → Video → Preferred video quality → 1080p
 
 **Audio**
 
-| Option | Description |
+| Option | Note |
 | --- | --- |
-| `0.15Mbps opus` | Preferred: best quality per bit |
-| `mp4a` | AAC: maximum compatibility, fallback for external audio gear |
-| `DRC` | Dynamic range compression: useful at night, reduces dynamics |
-| `Disabled` | Delegates to the player, may select the DRC variant |
+| `opus` | better quality per bit |
+| `mp4a` | AAC, widest compatibility, fallback for external audio gear |
+| `DRC` | dynamic range compression, useful at night, reduces dynamics |
+| `Disabled` | delegates to the player, may select the DRC variant |
 
 ---
 
-## 8. Performance
+## 8. Playback tuning
 
-**Decoding capability**
+**Enumerate decoders**
 
 ```bash
 adb shell "grep -o 'name=\"[^\"]*\"' /vendor/etc/media_codecs.xml"
 ```
 
-MT5879 supports AVC / HEVC / VP8 / VP9 / AV1 / VVC / Dolby Vision / AVS2 / AVS3 /
-MPEG2 / VC1 / WMV3, all hardware-decoded.
+Common hardware formats: AVC, HEVC, VP8, VP9, AV1, VVC, Dolby Vision, AVS2/AVS3,
+MPEG2, VC1.
 
-> MIME mapping: AV1 is `video/av01`, VP9 is `video/x-vnd.on2.vp9`.
+> MIME mapping: AV1 is `video/av01`, VP9 is `video/x-vnd.on2.vp9`. Searching for
+> `video/av1` or `video/vp9` misses both.
 
-**Playback measurements** (4K HDR AV1)
+**Diagnosing stutter**
 
-| Metric | Value |
+| Metric | How to observe | Interpretation |
+| --- | --- | --- |
+| Buffer | `buffered` vs `position` in `dumpsys media_session` | equal values mean no look-ahead — bandwidth starvation |
+| Player recreation | `Release` / `Init` frequency in `logcat` | periodic recreation usually means segment load timeouts |
+| Decoder | `OMX.*Decoder` and `output format changed` in `logcat` | confirms hardware decoding and actual resolution |
+| CPU | `ps -A -o RSS,NAME`, `/proc/<pid>/stat` | only a saturated core indicates a decoding bottleneck |
+| GPU | frame timings from `dumpsys gfxinfo <pkg>` | shows whether rendering is the limit |
+
+**Bitrate and bandwidth**
+
+| Resolution | Typical bitrate |
 | --- | --- |
-| Stream | 3840×2160, `color-transfer=3` (HDR10) |
-| Tunnel throughput | 4.29 Mbps |
-| Buffer | `buffered == position`, no look-ahead |
-| Player | `Release` → `Init` every ~22 s |
-| CPU | 89% of one core, 22% of total |
-| GPU | p50 3 ms / p90 7 ms |
+| 1080p | 1–6 Mbps |
+| 1440p | 8–12 Mbps |
+| 2160p HDR | 20–40 Mbps |
 
-Bandwidth is the bottleneck. 4K needs 20–40 Mbps; a single stream delivers 2–4 Mbps.
+On high-latency paths a single TCP connection is window-limited, so real throughput
+often falls below the node's nominal capacity (BDP limit). Players typically open one
+video and one audio connection, so effective throughput approaches the single-stream
+figure.
 
-**Single vs parallel**
+**Recommendations**
 
-| Node | Single | 4 parallel | Ratio |
-| --- | --- | --- | --- |
-| HK-03 | 2.29 Mbps | 11.14 Mbps | 4.9× |
-| HK-01 | 1.55 Mbps | 7.28 Mbps | 4.7× |
-| SG-02 | 2.23 Mbps | 7.18 Mbps | 3.2× |
-
-Higher RTT makes it harder for one connection to fill the link (BDP limit). Players
-typically open one video and one audio connection, so effective throughput approaches
-the single-stream value. **1080p is the practical ceiling for this device.**
+- Cap the preferred quality at 1080p to leave headroom
+- Rank nodes by single-stream throughput and latency, not by parallel benchmarks
+- If 4K is required, verify sustained single-stream throughput above 20 Mbps
 
 ---
 
@@ -328,12 +362,12 @@ the single-stream value. **1080p is the practical ceiling for this device.**
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| `NO_MATCHING_ABIS` | 32-bit system | use an `armeabi-v7a` build |
-| `VERIFICATION_FAILURE` | patched PMS rejects silently | install from an app market on the TV |
+| `NO_MATCHING_ABIS` | system bitness vs APK | use an `armeabi-v7a` build |
+| `VERIFICATION_FAILURE` | patched PMS blocks non-interactive installs | install from an app market on the TV |
 | `unauthorized`, no dialog | incompatible key encoding | `adb-auth-legacy.py` |
-| instant `failed to authenticate` | no usable private key | check `~/.android/adbkey` |
+| instant `failed to authenticate` | private key missing or unreadable | check `~/.android/adbkey` |
 | unreachable after reboot | ADB toggle reset | re-enable it |
-| URL becomes Chinese text | TV IME prediction | use the deep link |
+| URL becomes Chinese text | TV input method prediction | import via deep link |
 | two VPNs conflict | one active VPN allowed | keep a single client |
 | 4K loops on buffering | bandwidth below bitrate | cap at 1080p |
 | AV1/VP9 not found by grep | wrong MIME strings | `video/av01` / `video/x-vnd.on2.vp9` |
@@ -344,9 +378,9 @@ the single-stream value. **1080p is the practical ceiling for this device.**
 
 | File | Purpose |
 | --- | --- |
-| [`adb-auth-legacy.py`](scripts/adb-auth-legacy.py) | Legacy public-key handshake |
-| [`parse-sub.py`](scripts/parse-sub.py) | Subscription parser and plaintext-node detector |
-| [`bench-nodes.py`](scripts/bench-nodes.py) | Node throughput benchmark (single / parallel) |
+| [`adb-auth-legacy.py`](scripts/adb-auth-legacy.py) | legacy public-key handshake |
+| [`parse-sub.py`](scripts/parse-sub.py) | subscription parser and plaintext-node detector |
+| [`bench-nodes.py`](scripts/bench-nodes.py) | node throughput benchmark (single / parallel) |
 | [`analyze-apk.py`](scripts/analyze-apk.py) | APK static analysis: ABI, core, TV support |
 
 Requires Python 3.9+ and `adb`; benchmarking additionally requires `sing-box`.
