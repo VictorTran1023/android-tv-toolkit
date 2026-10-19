@@ -4,7 +4,12 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
+import android.app.usage.UsageEvents;
+import android.app.usage.UsageStatsManager;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.PixelFormat;
 import android.os.Handler;
 import android.os.IBinder;
@@ -15,16 +20,33 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
 
-/** Foreground service that owns the overlay strip. */
+/**
+ * Foreground service that owns the overlay strip.
+ * The strip is a 10-second peek: it appears when the service starts, when the screen wakes
+ * and when the foreground app changes, then fades out on its own.
+ */
 public class HudService extends Service {
 
     public static final String ACTION_STOP = "com.victor.tvhud.STOP";
+    public static final String ACTION_PEEK = "com.victor.tvhud.PEEK";
     private static final String CHANNEL = "hud";
+    private static final long PEEK_MS = 10_000L;
 
     private WindowManager wm;
     private HudView view;
     private PowerManager power;
+    private UsageStatsManager usm;
+    private long revealUntil;
+    private String lastPackage;
     private final Handler handler = new Handler(Looper.getMainLooper());
+
+    private final BroadcastReceiver screenOn = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            peek();
+        }
+    };
+
     private final Stats stats = new Stats();
     private final Runnable tick = new Runnable() {
         @Override
@@ -32,7 +54,12 @@ public class HudService extends Service {
             stats.sample(HudService.this);
             if (view != null) {
                 view.setStats(stats);
-                view.setVisibility(shouldHide() ? View.INVISIBLE : View.VISIBLE);
+                String pkg = currentForeground();
+                if (pkg != null && !pkg.equals(lastPackage)) {
+                    lastPackage = pkg;
+                    peek();
+                }
+                applyVisibility();
             }
             handler.postDelayed(this, 1000);
         }
@@ -44,9 +71,12 @@ public class HudService extends Service {
         getSharedPreferences("hud", MODE_PRIVATE).edit().putBoolean("enabled", true).apply();
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         power = (PowerManager) getSystemService(POWER_SERVICE);
+        usm = (UsageStatsManager) getSystemService(USAGE_STATS_SERVICE);
         startForeground(1, notification());
         if (Settings.canDrawOverlays(this)) {
             addOverlay();
+            registerReceiver(screenOn, new IntentFilter(Intent.ACTION_SCREEN_ON));
+            peek();
             handler.post(tick);
         } else {
             stopSelf();
@@ -62,7 +92,7 @@ public class HudService extends Service {
         return new Notification.Builder(this, CHANNEL)
                 .setSmallIcon(android.R.drawable.ic_menu_info_details)
                 .setContentTitle("TV HUD")
-                .setContentText("状态条运行中")
+                .setContentText("状态条运行中（展示 10 秒）")
                 .setOngoing(true)
                 .build();
     }
@@ -78,12 +108,52 @@ public class HudService extends Service {
                 PixelFormat.TRANSLUCENT);
         p.gravity = Gravity.TOP | Gravity.START;
         view = new HudView(this);
+        view.setVisibility(View.INVISIBLE);
         wm.addView(view, p);
     }
 
-    /** hidden while the panel is off, so it does not keep a lit strip in standby */
-    private boolean shouldHide() {
-        return power != null && !power.isInteractive();
+    /** show the strip for another 10 seconds */
+    private void peek() {
+        revealUntil = System.currentTimeMillis() + PEEK_MS;
+        applyVisibility();
+    }
+
+    private void applyVisibility() {
+        if (view == null) return;
+        boolean interactive = power == null || power.isInteractive();
+        boolean want = interactive && System.currentTimeMillis() < revealUntil;
+        if (want) {
+            if (view.getVisibility() != View.VISIBLE || view.getAlpha() < 1f) {
+                view.animate().cancel();
+                view.setAlpha(1f);
+                view.setVisibility(View.VISIBLE);
+            }
+        } else if (view.getVisibility() == View.VISIBLE) {
+            view.animate().alpha(0f).setDuration(350).withEndAction(new Runnable() {
+                @Override
+                public void run() {
+                    if (view != null) view.setVisibility(View.INVISIBLE);
+                }
+            }).start();
+        }
+    }
+
+    private String currentForeground() {
+        if (usm == null) return null;
+        long now = System.currentTimeMillis();
+        UsageEvents events = usm.queryEvents(now - 8000, now);
+        if (events == null) return null;
+        UsageEvents.Event e = new UsageEvents.Event();
+        String last = null;
+        long ts = 0;
+        while (events.hasNextEvent()) {
+            events.getNextEvent(e);
+            if (e.getEventType() == UsageEvents.Event.MOVE_TO_FOREGROUND && e.getTimeStamp() > ts) {
+                last = e.getPackageName();
+                ts = e.getTimeStamp();
+            }
+        }
+        return last;
     }
 
     @Override
@@ -91,6 +161,8 @@ public class HudService extends Service {
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
             getSharedPreferences("hud", MODE_PRIVATE).edit().putBoolean("enabled", false).apply();
             stopSelf();
+        } else if (intent != null && ACTION_PEEK.equals(intent.getAction())) {
+            peek();
         }
         return START_STICKY;
     }
@@ -98,6 +170,10 @@ public class HudService extends Service {
     @Override
     public void onDestroy() {
         handler.removeCallbacks(tick);
+        try {
+            unregisterReceiver(screenOn);
+        } catch (Exception ignored) {
+        }
         if (view != null && wm != null) {
             try {
                 wm.removeView(view);

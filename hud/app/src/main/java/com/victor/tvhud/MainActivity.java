@@ -43,6 +43,7 @@ public class MainActivity extends Activity {
 
         root.addView(button("开启状态条", v -> startHud()));
         root.addView(button("关闭状态条", v -> stopHud()));
+        root.addView(button("显示 10 秒", v -> peek()));
         root.addView(button("悬浮窗权限设置", v -> overlaySettings()));
         root.addView(button("退出", v -> finish()));
 
@@ -95,6 +96,12 @@ public class MainActivity extends Activity {
         refresh();
     }
 
+    private void peek() {
+        if (!allowed()) { overlaySettings(); return; }
+        startForegroundService(new Intent(this, HudService.class).setAction(HudService.ACTION_PEEK));
+        refresh();
+    }
+
     private void overlaySettings() {
         startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                 Uri.parse("package:" + getPackageName())));
@@ -112,3 +119,4 @@ public class MainActivity extends Activity {
         refresh();
     }
 }
+
