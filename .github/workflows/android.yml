@@ -20,10 +20,11 @@ jobs:
 
       - name: Build debug APK
         working-directory: hud
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon --stacktrace
 
       - uses: actions/upload-artifact@v4
         with:
           name: tvhud-debug
           path: hud/app/build/outputs/apk/debug/app-debug.apk
+
 
