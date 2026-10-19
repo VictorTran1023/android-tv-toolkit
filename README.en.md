@@ -457,11 +457,12 @@ What is actually readable on Android 11 / MTK:
 | SoC temperature °C | ⚠️ Shizuku only | `sysfs_thermal` is denied even to shell |
 | GPU utilisation % | ❌ | `mali0/gpuinfo` denied; no GED or devfreq node |
 
-Design specs, permissions, implementation and rollback: **[docs/hud-design.md](docs/hud-design.md)**.
+The working implementation lives in [`hud/`](hud): a ~20 KB native app with the status strip, the clock screensaver and a settings screen. It never takes remote focus and hides itself when the panel is off.
 
-![Status strip](docs/images/hud-strip.png)
-![Diagnostics panel](docs/images/hud-panel.png)
-![Clock screensaver](docs/images/clock-screensaver.png)
+Build, the TCL-specific install path (the vendor PMS blocks `adb install`), permissions and rollback: **[docs/hud-app.md](docs/hud-app.md)**.
+
+![Status strip](docs/images/hud-home.png)
+![Clock screensaver](docs/images/hud-clock.png)
 
 ---
 
@@ -492,4 +493,5 @@ risk and subject to local law. No nodes, accounts or subscription links are prov
 ## License
 
 [MIT](LICENSE)
+
 

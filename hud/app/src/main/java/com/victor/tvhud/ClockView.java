@@ -53,7 +53,7 @@ public class ClockView extends View {
 
     private void draw(Canvas c, String s, float x, float y, float sizeDp, Typeface tf, int color) {
         text.setTypeface(tf);
-        text.setTextSize(TypedValue.COMPLEX_UNIT_PX, dp(sizeDp));
+        text.setTextSize(dp(sizeDp));
         text.setColor(color);
         c.drawText(s, x, y, text);
     }
@@ -83,11 +83,13 @@ public class ClockView extends View {
 
         String lineText = (stats.vpn ? "VPN 已连接" : "VPN 未连接")
                 + "   ·   CPU " + stats.cpuPercent + "%"
-                + "   ·   " + stats.thermalLabel()
-                + "   ·   RAM " + (stats.memUsedMb / 1024f) + "G";
+                + "   ·   热状态 " + stats.thermalLabel()
+                + "   ·   RAM " + String.format(Locale.US, "%.1fG", stats.memUsedMb / 1024f);
         draw(c, lineText, left + dp(6), h * 0.71f, 16, regular, 0xFF8A8C94);
 
         draw(c, "按 OK 唤醒", left + dp(6), h * 0.90f, 13, regular, 0xFF5A5C64);
         c.drawLine(left, h * 0.86f, w - left, h * 0.86f, line);
     }
 }
+
+

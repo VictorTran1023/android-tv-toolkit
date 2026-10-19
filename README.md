@@ -435,11 +435,12 @@ adb shell reboot
 | 芯片温度 °C | ⚠️ 仅 Shizuku | `sysfs_thermal` 连 shell 都拒绝 |
 | GPU 占用 % | ❌ | `mali0/gpuinfo` 权限拒绝，无 GED/devfreq 节点 |
 
-设计规范、权限、实现路径与回滚见 **[docs/hud-design.md](docs/hud-design.md)**。
+仓库里的 [`hud/`](hud) 是这个方案的**已实现版本**（约 20 KB 原生应用）：顶部状态条 + 时钟屏保 + 设置页，不拦截按键、熄屏自动隐藏。
 
-![状态条](docs/images/hud-strip.png)
-![诊断面板](docs/images/hud-panel.png)
-![时钟屏保](docs/images/clock-screensaver.png)
+构建、TCL 固件的特殊安装方式（PMS 拦截 adb install）、权限与回滚见 **[docs/hud-app.md](docs/hud-app.md)**。
+
+![状态条](docs/images/hud-home.png)
+![时钟屏保](docs/images/hud-clock.png)
 
 ---
 
@@ -468,5 +469,6 @@ $env:TV_IP = "<TV_IP>"
 ## License
 
 [MIT](LICENSE)
+
 
 

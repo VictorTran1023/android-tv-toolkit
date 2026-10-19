@@ -9,8 +9,10 @@ import android.graphics.PixelFormat;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.provider.Settings;
 import android.view.Gravity;
+import android.view.View;
 import android.view.WindowManager;
 
 /** Foreground service that owns the overlay strip. */
@@ -21,13 +23,17 @@ public class HudService extends Service {
 
     private WindowManager wm;
     private HudView view;
+    private PowerManager power;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Stats stats = new Stats();
     private final Runnable tick = new Runnable() {
         @Override
         public void run() {
             stats.sample(HudService.this);
-            if (view != null) view.setStats(stats);
+            if (view != null) {
+                view.setStats(stats);
+                view.setVisibility(shouldHide() ? View.INVISIBLE : View.VISIBLE);
+            }
             handler.postDelayed(this, 1000);
         }
     };
@@ -35,7 +41,9 @@ public class HudService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        getSharedPreferences("hud", MODE_PRIVATE).edit().putBoolean("enabled", true).apply();
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
+        power = (PowerManager) getSystemService(POWER_SERVICE);
         startForeground(1, notification());
         if (Settings.canDrawOverlays(this)) {
             addOverlay();
@@ -69,15 +77,19 @@ public class HudService extends Service {
                         | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 PixelFormat.TRANSLUCENT);
         p.gravity = Gravity.TOP | Gravity.START;
-        p.x = 0;
-        p.y = 0;
         view = new HudView(this);
         wm.addView(view, p);
+    }
+
+    /** hidden while the panel is off, so it does not keep a lit strip in standby */
+    private boolean shouldHide() {
+        return power != null && !power.isInteractive();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
+            getSharedPreferences("hud", MODE_PRIVATE).edit().putBoolean("enabled", false).apply();
             stopSelf();
         }
         return START_STICKY;

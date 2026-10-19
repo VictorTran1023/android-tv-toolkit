@@ -14,7 +14,10 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 
-/** The strip that is drawn on top of every app. */
+/**
+ * Compact left-aligned strip: time, VPN, CPU, thermal status and throughput.
+ * Everything stays left of ~600 px so the TV's own top bar (tabs and icons) is not covered.
+ */
 public class HudView extends View {
 
     private static final int TEXT = 0xFFF5F6F8;
@@ -27,10 +30,8 @@ public class HudView extends View {
     private final Paint line = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint text = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint bar = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint measure = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path shield = new Path();
     private final SimpleDateFormat clock = new SimpleDateFormat("HH:mm", Locale.getDefault());
-    private final SimpleDateFormat date = new SimpleDateFormat("M月d日 EEE", Locale.CHINA);
     private final Typeface regular = Typeface.create("sans-serif", Typeface.NORMAL);
     private final Typeface medium = Typeface.create("sans-serif-medium", Typeface.NORMAL);
     private Stats stats = new Stats();
@@ -53,16 +54,10 @@ public class HudView extends View {
 
     private void prepare(Paint p, float sizeDp, boolean bold) {
         p.setTypeface(bold ? medium : regular);
-        p.setTextSize(TypedValue.COMPLEX_UNIT_PX, dp(sizeDp));
+        p.setTextSize(dp(sizeDp));
         p.setAntiAlias(true);
     }
 
-    private float width(String s, float sizeDp, boolean bold) {
-        prepare(measure, sizeDp, bold);
-        return measure.measureText(s);
-    }
-
-    /** draws text vertically centred on centerY, returns its width. */
     private float draw(Canvas c, String s, float x, float centerY, float sizeDp, boolean bold, int color) {
         prepare(text, sizeDp, bold);
         text.setColor(color);
@@ -71,11 +66,17 @@ public class HudView extends View {
         return text.measureText(s);
     }
 
+    private void divider(Canvas c, float x, float h) {
+        line.setColor(0x26FFFFFF);
+        line.setStrokeWidth(dp(1));
+        c.drawLine(x, dp(16), x, h - dp(16), line);
+    }
+
     @Override
     protected void onDraw(Canvas c) {
         int w = getWidth();
         int h = getHeight();
-        bg.setShader(new LinearGradient(0, 0, 0, h, 0xD905060A, 0x33000000, Shader.TileMode.CLAMP));
+        bg.setShader(new LinearGradient(0, 0, 0, h, 0xF205060A, 0x66000000, Shader.TileMode.CLAMP));
         c.drawRect(0, 0, w, h, bg);
         line.setColor(0x26FFFFFF);
         c.drawLine(0, h - dp(0.6f), w, h - dp(0.6f), line);
@@ -83,60 +84,43 @@ public class HudView extends View {
         float cy = h / 2f;
         float x = dp(26);
 
-        // clock + date
-        x += draw(c, clock.format(new Date()), x, cy, 21, true, TEXT) + dp(12);
-        x += draw(c, date.format(new Date()), x, cy, 11, false, MUTED) + dp(16);
-        c.drawLine(x, dp(18), x, h - dp(18), line);
+        x += draw(c, clock.format(new Date()), x, cy, 21, true, TEXT) + dp(18);
+        divider(c, x, h);
         x += dp(16);
 
-        // VPN
         float s = dp(15);
         buildShield(x, cy - s / 2, s);
         bar.setColor(stats.vpn ? GREEN : 0xFF6B6D75);
         c.drawPath(shield, bar);
         x += s + dp(8);
-        x += draw(c, "VPN", x, cy, 10, false, MUTED) + dp(8);
-        draw(c, stats.vpn ? "已连接" : "未连接", x, cy, 12, true,
-                stats.vpn ? GREEN : 0xFF8A6A6A);
+        x += draw(c, "VPN", x, cy, 10, false, MUTED) + dp(6);
+        x += draw(c, stats.vpn ? "已连接" : "未连接", x, cy, 12, true,
+                stats.vpn ? GREEN : 0xFF8A6A6A) + dp(18);
+        divider(c, x, h);
+        x += dp(16);
 
-        // right cluster, right to left
-        float right = w - dp(26);
-        right = pair(c, "↑", rate(stats.txBps), right, cy, TEXT);
-        right = pair(c, "↓", rate(stats.rxBps), right, cy, TEXT);
-        right = pair(c, "RAM", (stats.memUsedMb / 1024f) + "G", right, cy, TEXT);
-        int tc = stats.thermalStatus >= 5 ? RED : stats.thermalStatus >= 2 ? AMBER : GREEN;
-        right = pair(c, "TEMP", stats.thermalLabel(), right, cy, tc);
-
-        // CPU cluster
-        String cpuValue = stats.cpuPercent + "%";
-        float lw = width("CPU", 10, false);
-        float vw = width(cpuValue, 13, true);
-        float cx = right - (lw + dp(8) + vw + dp(8) + dp(34));
-        draw(c, "CPU", cx, cy, 10, false, MUTED);
-        draw(c, cpuValue, cx + lw + dp(8), cy, 13, true, TEXT);
-
-        float bx = cx + lw + dp(8) + vw + dp(8);
+        x += draw(c, "CPU", x, cy, 10, false, MUTED) + dp(6);
+        x += draw(c, stats.cpuPercent + "%", x, cy, 13, true, TEXT) + dp(8);
         float bw = dp(34);
         bar.setColor(0x33FFFFFF);
-        c.drawRoundRect(bx, cy - dp(1.5f), bx + bw, cy + dp(1.5f), dp(1.5f), dp(1.5f), bar);
+        c.drawRoundRect(x, cy - dp(1.5f), x + bw, cy + dp(1.5f), dp(1.5f), dp(1.5f), bar);
         bar.setColor(stats.cpuPercent > 70 ? AMBER : GREEN);
-        c.drawRoundRect(bx, cy - dp(1.5f), bx + bw * stats.cpuPercent / 100f, cy + dp(1.5f),
+        c.drawRoundRect(x, cy - dp(1.5f), x + bw * stats.cpuPercent / 100f, cy + dp(1.5f),
                 dp(1.5f), dp(1.5f), bar);
-    }
+        x += bw + dp(18);
+        divider(c, x, h);
+        x += dp(16);
 
-    /** right-aligned "label value" with a separator; returns the next right edge. */
-    private float pair(Canvas c, String label, String value, float right, float cy, int valueColor) {
-        float vw = width(value, 13, true);
-        float lw = width(label, 10, false);
-        float left = right - vw - dp(6) - lw;
-        draw(c, label, left, cy, 10, false, MUTED);
-        draw(c, value, left + lw + dp(6), cy, 13, true, valueColor);
+        int tc = stats.thermalStatus >= 5 ? RED : stats.thermalStatus >= 2 ? AMBER : GREEN;
+        x += draw(c, "TEMP", x, cy, 10, false, MUTED) + dp(6);
+        x += draw(c, stats.thermalLabel(), x, cy, 13, true, tc) + dp(18);
+        divider(c, x, h);
+        x += dp(16);
 
-        float next = left - dp(20);
-        line.setColor(0x22FFFFFF);
-        line.setStrokeWidth(dp(0.8f));
-        c.drawLine(next + dp(10), dp(18), next + dp(10), getHeight() - dp(18), line);
-        return next;
+        x += draw(c, "↓", x, cy, 11, false, MUTED) + dp(4);
+        x += draw(c, rate(stats.rxBps), x, cy, 12, true, TEXT) + dp(12);
+        x += draw(c, "↑", x, cy, 11, false, MUTED) + dp(4);
+        draw(c, rate(stats.txBps), x, cy, 12, true, MUTED);
     }
 
     private void buildShield(float x, float y, float s) {
