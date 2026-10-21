@@ -1,6 +1,6 @@
 <div align="center">
 
-# TCL 电视调试与调优手册
+# TCL 电视调优工具箱
 
 不 root、不刷机，把一台国行 Android TV 从「连不上」调到「能看、能测、可回滚」
 

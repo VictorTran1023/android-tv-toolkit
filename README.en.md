@@ -1,6 +1,6 @@
 <div align="center">
 
-# TCL TV Debugging & Tuning Handbook
+# TCL TV Toolkit
 
 Making a China-market Android TV usable — without root, without flashing, with a way back
 
