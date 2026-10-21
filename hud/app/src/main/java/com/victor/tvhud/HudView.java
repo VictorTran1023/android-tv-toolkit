@@ -92,53 +92,66 @@ public class HudView extends View {
         bg.setShader(new LinearGradient(0, 0, 0, h, 0xF0090B10, 0x00090B10, Shader.TileMode.CLAMP));
         c.drawRect(0, 0, w, h, bg);
 
-        float cy = h / 2f;
+        // 两行布局：整条控制在 ~430 dp 内，避开电视自己右上角的按钮
+        float r1 = h * 0.31f;
+        float r2 = h * 0.71f;
         float x = dp(24);
 
-        x += draw(c, clock.format(new Date()), x, cy, 23, light, TEXT) + dp(16);
-        divider(c, x, h);
-        x += dp(14);
-
-        // VPN
-        float s = dp(14);
-        buildShield(x, cy - s / 2, s);
+        // ---- 第一行：时间 · VPN · CPU ----
+        x += draw(c, clock.format(new Date()), x, r1, 20, light, TEXT) + dp(14);
+        float s = dp(13);
+        buildShield(x, r1 - s / 2, s);
         shape.setColor(stats.vpn ? GREEN : 0xFF6B6D75);
         c.drawPath(shield, shape);
-        x += s + dp(8);
-        x += capped(c, "VPN", x, cy, MUTED) + dp(6);
-        x += draw(c, stats.vpn ? "已连接" : "未连接", x, cy, 12, medium,
+        x += s + dp(7);
+        x += capped(c, "VPN", x, r1, MUTED) + dp(6);
+        x += draw(c, stats.vpn ? "已连接" : "未连接", x, r1, 12, medium,
                 stats.vpn ? GREEN : 0xFF8A6A6A) + dp(16);
-        divider(c, x, h);
-        x += dp(14);
 
-        // CPU
-        x += capped(c, "CPU", x, cy, MUTED) + dp(7);
-        x += draw(c, stats.cpuPercent + "%", x, cy, 13, medium, TEXT) + dp(8);
-        float bw = dp(34), bh = dp(3.2f);
+        x += capped(c, "CPU", x, r1, MUTED) + dp(7);
+        x += draw(c, stats.cpuPercent + "%", x, r1, 13, medium, TEXT) + dp(8);
+        float bw = dp(30), bh = dp(3.2f);
         shape.setColor(0x2EFFFFFF);
-        c.drawRoundRect(x, cy - bh / 2, x + bw, cy + bh / 2, bh / 2, bh / 2, shape);
+        c.drawRoundRect(x, r1 - bh / 2, x + bw, r1 + bh / 2, bh / 2, bh / 2, shape);
         shape.setColor(stats.cpuPercent > 70 ? AMBER : GREEN);
-        c.drawRoundRect(x, cy - bh / 2, x + bw * stats.cpuPercent / 100f, cy + bh / 2,
+        c.drawRoundRect(x, r1 - bh / 2, x + bw * stats.cpuPercent / 100f, r1 + bh / 2,
                 bh / 2, bh / 2, shape);
-        x += bw + dp(16);
-        divider(c, x, h);
-        x += dp(14);
 
-        // thermal
-        int tc = stats.thermalStatus >= 5 ? RED : stats.thermalStatus >= 2 ? AMBER : GREEN;
-        x += capped(c, "TEMP", x, cy, MUTED) + dp(7);
-        buildThermo(x, cy, dp(9), tc);
+        // ---- 第二行：RAM · TEMP · 流量 ----
+        x = dp(24);
+        int memPct = stats.memTotalMb > 0
+                ? Math.round(stats.memUsedMb * 100f / stats.memTotalMb) : 0;
+        int mc = memPct >= 88 ? RED : memPct >= 72 ? AMBER : GREEN;
+        x += capped(c, "RAM", x, r2, MUTED) + dp(7);
+        x += draw(c, String.format(Locale.US, "%.1fG", stats.memUsedMb / 1024f), x, r2, 13, medium, mc) + dp(8);
+        float rw = dp(26), rh = dp(3.2f);
+        shape.setColor(0x2EFFFFFF);
+        c.drawRoundRect(x, r2 - rh / 2, x + rw, r2 + rh / 2, rh / 2, rh / 2, shape);
+        shape.setColor(mc);
+        c.drawRoundRect(x, r2 - rh / 2, x + rw * memPct / 100f, r2 + rh / 2, rh / 2, rh / 2, shape);
+        x += rw + dp(16);
+
+        // 有真实温度就显示 °C，拿不到就退回三档文字
+        boolean hasTemp = stats.cpuTempC > 0;
+        int tc;
+        if (hasTemp) {
+            tc = stats.cpuTempC >= 72 ? RED : stats.cpuTempC >= 60 ? AMBER : GREEN;
+        } else {
+            tc = stats.thermalStatus >= 5 ? RED : stats.thermalStatus >= 2 ? AMBER : GREEN;
+        }
+        String tText = hasTemp
+                ? String.format(Locale.US, "%.0f°", stats.cpuTempC)
+                : stats.thermalLabel();
+        x += capped(c, "TEMP", x, r2, MUTED) + dp(7);
+        buildThermo(x, r2, dp(9), tc);
         c.drawPath(thermo, shape);
         x += dp(11);
-        x += draw(c, stats.thermalLabel(), x, cy, 12, medium, tc) + dp(16);
-        divider(c, x, h);
-        x += dp(14);
+        x += draw(c, tText, x, r2, 12, medium, tc) + dp(16);
 
-        // throughput
-        x += draw(c, "↓", x, cy, 11, regular, MUTED) + dp(4);
-        x += draw(c, rate(stats.rxBps), x, cy, 12, medium, TEXT) + dp(12);
-        x += draw(c, "↑", x, cy, 11, regular, MUTED) + dp(4);
-        draw(c, rate(stats.txBps), x, cy, 12, medium, 0xFFC9CBD2);
+        x += draw(c, "↓", x, r2, 11, regular, MUTED) + dp(4);
+        x += draw(c, rate(stats.rxBps), x, r2, 12, medium, TEXT) + dp(12);
+        x += draw(c, "↑", x, r2, 11, regular, MUTED) + dp(4);
+        draw(c, rate(stats.txBps), x, r2, 12, medium, 0xFFC9CBD2);
     }
 
     private void buildShield(float x, float y, float s) {

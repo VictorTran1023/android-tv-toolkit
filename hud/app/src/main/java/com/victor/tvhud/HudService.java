@@ -158,6 +158,9 @@ public class HudService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        // 每次 startForegroundService 之后都必须再调一次 startForeground，
+        // 否则 Android 11 会以 "did not then call Service.startForeground()" 直接杀掉进程。
+        startForeground(1, notification());
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
             getSharedPreferences("hud", MODE_PRIVATE).edit().putBoolean("enabled", false).apply();
             stopSelf();

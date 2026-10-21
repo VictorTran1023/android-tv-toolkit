@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="remote_key_desc">按遥控器的语音键，呼出左上角状态条（显示 10 秒）。只识别这一个键，其他按键不拦截。</string>
+</resources>

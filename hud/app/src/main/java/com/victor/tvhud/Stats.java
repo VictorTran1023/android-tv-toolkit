@@ -23,6 +23,8 @@ public class Stats {
     public float txBps;
     public boolean vpn;
     public int thermalStatus;
+    /** CPU 温度 °C；0 表示暂时拿不到（没授权 / ADB 关着） */
+    public float cpuTempC;
 
     private long lastCpuTotal = -1;
     private long lastCpuIdle = -1;
@@ -40,6 +42,7 @@ public class Stats {
         sampleVpn(ctx);
         PowerManager pm = (PowerManager) ctx.getSystemService(Context.POWER_SERVICE);
         thermalStatus = pm != null ? pm.getCurrentThermalStatus() : 0;
+        cpuTempC = ThermalProbe.celsius(ctx);
     }
 
     private void sampleCpu() {
