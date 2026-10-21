@@ -20,6 +20,11 @@ The four walls of a China-market Android TV — **can't connect, can't install, 
 
 This repository documents what worked on a **TCL T7K (Android 11 / MT9952 / 3.83 GB)**: every step has a command, a measurement, and a rollback. No root, no flashing, no system partition edits.
 
+> **New here? Read the [usage guide](docs/usage.md) first.**
+> It covers what to press on the TV, what to type on the PC, and how to delegate the work to an agent — roughly 30 minutes from zero to "one app installed, one regression passed".
+> Want the reasoning and results only? Keep reading. Ready to act? Open the guide.
+
+**Suggested reading order**: usage guide (how to act) → handbook (specific problems) → T7K optimisation log (what changed and why) → ADB internals / Blade UI (how it works, and where it could go).
 ## What you get
 
 | Wall | Approach | Result |
@@ -101,7 +106,7 @@ A complete visual proposal for replacing the launcher — Xbox 360 blade styling
 
 ## Quick start
 
-New here? Read the [**usage guide**](docs/usage.md) first: 5 steps on the TV, 4 commands on the PC, plus agent prompt templates.
+Full walkthrough in the [**usage guide**](docs/usage.md): 5 steps on the TV, 4 commands on the PC, plus agent prompt templates.
 
 ```bash
 git clone https://github.com/VictorTran1023/tcl-tv-toolkit.git
