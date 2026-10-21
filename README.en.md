@@ -25,6 +25,7 @@ This repository documents what worked on a **TCL T7K (Android 11 / MT9952 / 3.83
 > Want the reasoning and results only? Keep reading. Ready to act? Open the guide.
 
 **Suggested reading order**: usage guide (how to act) → handbook (specific problems) → T7K optimisation log (what changed and why) → ADB internals / Blade UI (how it works, and where it could go).
+
 ## What you get
 
 | Wall | Approach | Result |
