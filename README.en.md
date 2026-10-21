@@ -150,6 +150,14 @@ Not obtainable: GPU utilisation (`mali0/gpuinfo` denies access; no GED/devfreq n
 
 Build (no Gradle), per-brand install channels, and what an upgrade resets: [docs/hud-app.md](docs/hud-app.md).
 
+## Launcher design: Apple tvOS style
+
+![tvOS-style home](docs/images/tvos-home.png)
+
+A single-screen home: greeting + large clock, a continue-watching hero, live/input side cards, and a bottom dock. Focus only moves between the content zone and the dock — no horizontal paging, no blur.
+
+**Design and interactive prototype only — not deployed, and it does not take over HOME.** Full spec, focus model, performance budget and milestones: [docs/ui-study.md](docs/ui-study.md).
+
 ## Repository layout
 
 ```
@@ -163,7 +171,7 @@ Build (no Gradle), per-brand install channels, and what an upgrade resets: [docs
 │   ├── hud-app.md        Build, install, upgrade cost
 │   ├── hud-design.md     Strip / screensaver design spec
 │   ├── regression.md     Regression checks
-│   └── ui-study.md       Launcher UI design archive (shelved)
+│   └── ui-study.md       Apple tvOS-style launcher design
 ├── hud/                  Native HUD sources (Java, no third-party deps)
 ├── scripts/              Python tools and PowerShell gate/regression scripts
 └── .github/workflows/    CI: build APK, self-check scripts
@@ -181,7 +189,7 @@ Build (no Gradle), per-brand install channels, and what an upgrade resets: [docs
 | [hud-app.md](docs/hud-app.md) | Building and installing the HUD (per-brand channels and upgrade cost) |
 | [hud-design.md](docs/hud-design.md) | Strip and screensaver design spec |
 | [regression.md](docs/regression.md) | Checks and pass criteria |
-| [ui-study.md](docs/ui-study.md) | Launcher UI design archive (shelved) |
+| [ui-study.md](docs/ui-study.md) | Apple tvOS-style launcher design |
 
 ## Quick start
 

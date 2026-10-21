@@ -150,6 +150,14 @@ adb install -r tvhud.apk
 
 构建方式（无 Gradle）、各品牌安装通道、升级会重置哪些状态，见 [docs/hud-app.md](docs/hud-app.md)。
 
+## 桌面设计：Apple tvOS 风格
+
+![tvOS 风格首页](docs/images/tvos-home.png)
+
+单页首页：问候 + 大时钟、继续观看主卡、直播/输入源侧卡、底部 Dock。焦点只在「内容区 ↔ Dock」之间移动，不做横向分页、不做毛玻璃。
+
+**目前是设计稿 + 交互原型，未装机，也不接管 HOME**；完整规范、焦点模型、性能预算和里程碑见 [docs/ui-study.md](docs/ui-study.md)。
+
 ## 仓库结构
 
 ```
@@ -163,7 +171,7 @@ adb install -r tvhud.apk
 │   ├── hud-app.md        HUD 构建、安装、升级代价
 │   ├── hud-design.md     状态条 / 屏保设计规范
 │   ├── regression.md     回归检查项与判定标准
-│   └── ui-study.md       桌面 UI 设计存档（已搁置）
+│   └── ui-study.md       Apple tvOS 风格桌面设计
 ├── hud/                  原生 HUD 应用源码（Java，无第三方依赖）
 ├── scripts/              Python 工具与 PowerShell 闸门/回归脚本
 └── .github/workflows/    CI：构建 APK + 脚本自检
@@ -181,7 +189,7 @@ adb install -r tvhud.apk
 | [hud-app.md](docs/hud-app.md) | HUD 构建与安装（含各品牌通道与升级代价） |
 | [hud-design.md](docs/hud-design.md) | 状态条与屏保的设计规范 |
 | [regression.md](docs/regression.md) | 回归检查项与判定标准 |
-| [ui-study.md](docs/ui-study.md) | 桌面 UI 设计存档（已搁置） |
+| [ui-study.md](docs/ui-study.md) | Apple tvOS 风格桌面设计 |
 
 ## 快速开始
 
