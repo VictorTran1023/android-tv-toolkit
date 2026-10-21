@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Regression suite for an Android TV after debloating or tuning.
+    Brand-agnostic regression suite for an Android TV after debloating or tuning.
 
 .DESCRIPTION
     Wakes the TV, walks through the paths a user actually needs (HOME, D-pad,
@@ -8,21 +8,35 @@
     It changes no settings and disables nothing; the only side effects are
     key injection, opening two apps, and leaving the TV on HOME.
 
-    Checks: boot state, launcher, HOME key, D-pad reaction (screenshot diff),
-    non-black screen, Settings open/back, app launch/back, Wi-Fi, outbound
-    connectivity, critical system packages, expected disabled packages,
-    crash buffer, ANR files.
+    The launcher and Settings packages are auto-detected with
+    `cmd package resolve-activity`; nothing is hard-coded to TCL.
+
+.PARAMETER ExpectDisabled
+    Packages that should still be disabled after your change, e.g.
+    -ExpectDisabled com.tcl.walleve. Empty by default so the suite is safe
+    to run on any brand.
+
+.PARAMETER CriticalPackages
+    Extra packages that must remain enabled (vendor settings, remote service,
+    systemui, ...). The launcher and Settings packages are always checked.
 
 .EXAMPLE
     .\scripts\regress.ps1
 
 .EXAMPLE
-    .\scripts\regress.ps1 -TvIp 192.168.1.50 -AppPackage org.smarttube.stable
+    .\scripts\regress.ps1 -TvIp 192.168.1.50 -ExpectDisabled com.tcl.walleve
+
+.EXAMPLE
+    .\scripts\regress.ps1 -CriticalPackages com.tcl.systemserver,com.tcl.autopair
 #>
 param(
     [string]$TvIp = $env:TV_IP,
     [string]$AppPackage = "org.smarttube.stable",
-    [string]$OutDir = ""
+    [string]$OutDir = "",
+    [string]$LauncherPackage = "",
+    [string]$SettingsPackage = "",
+    [string[]]$CriticalPackages = @(),
+    [string[]]$ExpectDisabled = @()
 )
 
 $ErrorActionPreference = "Continue"
@@ -30,9 +44,14 @@ if (-not $TvIp) { throw "Pass -TvIp <address> or set the TV_IP environment varia
 if (-not (Get-Command adb -ErrorAction SilentlyContinue)) { throw "adb was not found in PATH." }
 
 $root = Split-Path $PSScriptRoot -Parent
+$caller = (Get-Location).Path
 Set-Location $root
 [Environment]::CurrentDirectory = (Get-Location).Path
-if (-not $OutDir) { $OutDir = Join-Path "audit\regress" (Get-Date -Format "yyyyMMdd-HHmmss") }
+if (-not $OutDir) {
+    $OutDir = Join-Path "audit\regress" (Get-Date -Format "yyyyMMdd-HHmmss")
+} elseif (-not [System.IO.Path]::IsPathRooted($OutDir)) {
+    $OutDir = Join-Path $caller $OutDir
+}
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
 function Sh([string]$cmd) { (& adb shell $cmd 2>&1) -join "`n" }
@@ -42,6 +61,39 @@ function Shot([string]$name) {
     & adb pull /sdcard/regress.png (Join-Path $OutDir $name) 2>&1 | Out-Null
 }
 function Focus { (Sh "dumpsys window | grep mCurrentFocus").Trim() }
+
+function Resolve-Pkg([string]$action) {
+    $out = Sh "cmd package resolve-activity --brief -a $action | tail -1"
+    $m = [regex]::Match($out, '([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)/')
+    if ($m.Success) { return $m.Groups[1].Value }
+    return ""
+}
+
+function Installed([string]$pkg) {
+    if (-not $pkg) { return $false }
+    $out = Sh ("pm list packages -e " + $pkg)
+    $lines = $out -split "`n" | ForEach-Object { $_.Trim() }
+    return ($lines -contains ("package:" + $pkg))
+}
+
+function Resolve-Settings {
+    $resolved = Resolve-Pkg "android.settings.SETTINGS"
+    if ($resolved -and (Installed $resolved)) { return $resolved }
+
+    foreach ($p in @("com.android.tv.settings", "com.android.settings", "com.tcl.settings")) {
+        if (Installed $p) { return $p }
+    }
+
+    # Last resort: a launcher activity whose package name contains "settings".
+    $out = Sh "cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER"
+    foreach ($line in ($out -split "`n")) {
+        $m = [regex]::Match($line, '([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)/')
+        if (-not $m.Success) { continue }
+        $p = $m.Groups[1].Value
+        if ($p -match "settings" -and $p -notmatch "provider" -and (Installed $p)) { return $p }
+    }
+    return ""
+}
 
 $script:rows = @()
 function Add([string]$name, [string]$status, [string]$detail) {
@@ -86,17 +138,22 @@ function Luma([string]$path, [int]$step = 24) {
 & adb connect $TvIp 2>&1 | Out-Null
 & adb wait-for-device
 
+# ---------------------------------------------------------------- detection
+if (-not $LauncherPackage) { $LauncherPackage = Resolve-Pkg "android.intent.action.MAIN -c android.intent.category.HOME" }
+if (-not $SettingsPackage) { $SettingsPackage = Resolve-Settings }
+Write-Output ("[INFO] launcher=" + $LauncherPackage + " settings=" + $SettingsPackage)
+
 $boot = (Sh "getprop sys.boot_completed").Trim()
 if ($boot -eq "1") { Add "boot completed" "PASS" (Sh "uptime").Trim() } else { Add "boot completed" "FAIL" ("boot_completed=" + $boot) }
 
-$cyber = (Sh "pidof com.tcl.cyberui").Trim()
-if ($cyber) { Add "launcher process" "PASS" ("pid=" + $cyber) } else { Add "launcher process" "FAIL" "com.tcl.cyberui not running" }
+$launcherPid = (Sh ("pidof " + $LauncherPackage)).Trim()
+if ($launcherPid) { Add "launcher process" "PASS" ("pid=" + $launcherPid) } else { Add "launcher process" "FAIL" ($LauncherPackage + " not running") }
 
 & adb shell "input keyevent KEYCODE_HOME" | Out-Null
 & adb shell "input keyevent KEYCODE_WAKEUP" | Out-Null
 Start-Sleep -Seconds 3
 $f = Focus
-if ($f -match "com\.tcl\.cyberui") { Add "HOME key" "PASS" $f } else { Add "HOME key" "FAIL" $f }
+if ($LauncherPackage -and $f -match [regex]::Escape($LauncherPackage)) { Add "HOME key" "PASS" $f } else { Add "HOME key" "FAIL" $f }
 Shot "01-home.png"
 
 Shot "02-focus-a.png"; Start-Sleep -Milliseconds 1200; Shot "02-focus-b.png"
@@ -110,43 +167,78 @@ else { Add "D-pad reaction" "WARN" ("screen changed {0:P2} (idle {1:P2})" -f $mo
 $luma = Luma (Join-Path $OutDir "02-focus-c.png")
 if ($luma -gt 12) { Add "screen not black" "PASS" ("luma " + $luma) } else { Add "screen not black" "FAIL" ("luma " + $luma) }
 
-& adb shell "monkey -p com.tcl.settings -c android.intent.category.LAUNCHER 1" 2>&1 | Out-Null
-Start-Sleep -Seconds 5
-$f = Focus
-if ($f -match "com\.tcl\.settings") { Add "Settings opens" "PASS" $f } else { Add "Settings opens" "FAIL" $f }
+# Settings: platform intent first; fall back to the detected package's launcher activity.
+if ($SettingsPackage) {
+    & adb shell "am start -a android.settings.SETTINGS" 2>&1 | Out-Null
+    Start-Sleep -Seconds 3
+    $f = Focus
+    if ($f -notmatch "settings") {
+        & adb shell "monkey -p $SettingsPackage -c android.intent.category.LAUNCHER 1" 2>&1 | Out-Null
+        Start-Sleep -Seconds 4
+        $f = Focus
+    }
+} else {
+    $f = "(no settings package detected)"
+}
+if ($SettingsPackage -and (($f -match [regex]::Escape($SettingsPackage)) -or ($f -match "settings"))) { Add "Settings opens" "PASS" $f } else { Add "Settings opens" "FAIL" $f }
 Shot "03-settings.png"
 & adb shell "input keyevent KEYCODE_BACK" | Out-Null
 Start-Sleep -Seconds 2
 $f = Focus
-if ($f -notmatch "com\.tcl\.settings") { Add "Settings closes" "PASS" $f } else { Add "Settings closes" "FAIL" $f }
+if ($f -match "settings") {
+    & adb shell "input keyevent KEYCODE_BACK" | Out-Null
+    Start-Sleep -Seconds 2
+    $f = Focus
+}
+if ($f -notmatch "settings") { Add "Settings closes" "PASS" $f } else { Add "Settings closes" "FAIL" $f }
 
-& adb shell "monkey -p $AppPackage -c android.intent.category.LAUNCHER 1" 2>&1 | Out-Null
-Start-Sleep -Seconds 7
-$f = Focus
-if ($f -match ([regex]::Escape($AppPackage))) { Add "app launches" "PASS" $f } else { Add "app launches" "WARN" $f }
-Shot "04-app.png"
-& adb shell "input keyevent KEYCODE_HOME" | Out-Null
-Start-Sleep -Seconds 2
-$f = Focus
-if ($f -match "com\.tcl\.cyberui") { Add "back to HOME" "PASS" $f } else { Add "back to HOME" "WARN" $f }
+$appInstalled = (Sh ("pm list packages -e " + $AppPackage)).Trim()
+$appLines = $appInstalled -split "`n" | ForEach-Object { $_.Trim() }
+if ($appLines -contains ("package:" + $AppPackage)) {
+    & adb shell "monkey -p $AppPackage -c android.intent.category.LAUNCHER 1" 2>&1 | Out-Null
+    Start-Sleep -Seconds 7
+    $f = Focus
+    if ($f -match ([regex]::Escape($AppPackage))) { Add "app launches" "PASS" $f } else { Add "app launches" "WARN" $f }
+    Shot "04-app.png"
+    & adb shell "input keyevent KEYCODE_HOME" | Out-Null
+    Start-Sleep -Seconds 2
+    $f = Focus
+    if ($f -match [regex]::Escape($LauncherPackage)) { Add "back to HOME" "PASS" $f } else { Add "back to HOME" "WARN" $f }
+} else {
+    Add "app launches" "WARN" ($AppPackage + " is not installed (pass -AppPackage)")
+}
 
 $wifi = Sh "cmd wifi status"
 if ($wifi -match "connected to") { Add "Wi-Fi connected" "PASS" (($wifi -split "`n" | Select-String "connected to").Line.Trim()) }
-else { Add "Wi-Fi connected" "FAIL" (($wifi -split "`n" | Select-Object -First 2) -join " ") }
+else { Add "Wi-Fi connected" "WARN" (($wifi -split "`n" | Select-Object -First 2) -join " ") }
 $ping = Sh "ping -c 2 -W 2 223.5.5.5"
 if ($ping -match "2 (packets )?received|2 received") { Add "outbound network" "PASS" (($ping -split "`n" | Select-Object -Last 2) -join " ") }
 else { Add "outbound network" "WARN" "no ICMP reply (router may block it)" }
 
-$critical = @("com.tcl.cyberui", "com.tcl.settings", "com.tcl.systemserver", "com.tcl.initsetup",
-    "com.tcl.autopair", "com.tcl.tcl_bt_rcu_service", "com.tcl.profilemanager",
-    "com.tcl.TFDS.service", "com.tcl.factory.view", "com.tcl.systemui.plugin", "com.tcl.overlay.systemui")
+# Critical packages: launcher + Settings + any vendor packages the caller names.
+$critical = @($LauncherPackage, $SettingsPackage) + $CriticalPackages |
+    Where-Object { $_ } | Select-Object -Unique
 $enabled = Sh "pm list packages -e"
-$missing = $critical | Where-Object { $enabled -notmatch ("package:" + [regex]::Escape($_) + "\b") }
-if (-not $missing) { Add "critical packages" "PASS" "all 11 enabled" } else { Add "critical packages" "FAIL" ("missing: " + ($missing -join ", ")) }
+$enabledLines = $enabled -split "`n" | ForEach-Object { $_.Trim() }
+$missing = @($critical | Where-Object { $enabledLines -notcontains ("package:" + $_) })
+if ($critical.Count -eq 0) {
+    Add "critical packages" "INFO" "none to check"
+} elseif (-not $missing) {
+    Add "critical packages" "PASS" ("all " + $critical.Count + " enabled")
+} else {
+    Add "critical packages" "FAIL" ("missing: " + ($missing -join ", "))
+}
 
-$disabled = Sh "cmd package list packages -d"
-if ($disabled -match "com\.tcl\.walleve") { Add "walleve disabled" "PASS" "disabled-user (expected)" }
-else { Add "walleve disabled" "WARN" "walleve is enabled again" }
+# Expected disabled packages are opt-in; empty on a generic device.
+if ($ExpectDisabled.Count -eq 0) {
+    Add "expected disabled" "INFO" "none specified (pass -ExpectDisabled <pkg>)"
+} else {
+    $disabled = Sh "cmd package list packages -d"
+    $disabledLines = $disabled -split "`n" | ForEach-Object { $_.Trim() }
+    $notDisabled = @($ExpectDisabled | Where-Object { $disabledLines -notcontains ("package:" + $_) })
+    if (-not $notDisabled) { Add "expected disabled" "PASS" (($ExpectDisabled -join ", ") + " still disabled") }
+    else { Add "expected disabled" "FAIL" ("re-enabled: " + ($notDisabled -join ", ")) }
+}
 
 $crash = Sh "logcat -d -b crash -t 40"
 if (-not $crash.Trim()) { Add "crash buffer" "PASS" "empty" } else { Add "crash buffer" "WARN" (($crash -split "`n" | Select-Object -Last 3) -join " / ") }
@@ -165,4 +257,3 @@ Save "00-summary.txt" (($script:rows | ForEach-Object { "{0}`t{1}`t{2}" -f $_.St
 Write-Output ("RESULT: {0} checks, {1} FAIL, {2} WARN -> {3}" -f $script:rows.Count, $fail.Count, $warn.Count, $(if ($fail.Count) { "FAILED" } else { "PASSED" }))
 Write-Output ("evidence: " + (Resolve-Path $OutDir))
 if ($fail.Count) { exit 1 } else { exit 0 }
-

@@ -1,6 +1,7 @@
-# 在电视内部跑 ADB
+# 在电视内部跑 ADB（以 TCL 为例）
 
 > 一个普通应用如何以 shell 身份读取系统信息——不 root、不 Shizuku、不额外装东西。
+> 原理适用于 Android 5+；能否拿到温度取决于品牌的 SELinux 策略和 `thermalservice` 实现，换品牌先用 `adb shell dumpsys thermalservice` 验证。
 
 ## 问题
 
@@ -70,7 +71,7 @@ ADB 的线协议很小，实现一个「只跑命令」的客户端约 200 行�
 | CPU 温度 °C | ✅ | `dumpsys thermalservice` 解析 `mName=cpu` |
 | 电池/皮肤/NPU 温度 | ✅（多为 0） | 同一条 dump 里的其他 `Temperature{}` |
 | 更细的温区 | ❌ | `sysfs` 对 shell 也拒绝 |
-| GPU 占用 | ❌ | `mali0/gpuinfo` 拒绝，无 GED/devfreq 节点 |
+| GPU 占用 | ❌ | `mali0/gpuinfo` 拒绝，无 GED/devfreq 节点；型号可由 OpenGL/AIDA64 得到（Mali-G52） |
 | 遥控器语音键 | ❌ | 该键在输入层就是 `KEY_UNKNOWN`，到不了应用层（见下） |
 
 ## 一个反例：为什么按键拦截失败

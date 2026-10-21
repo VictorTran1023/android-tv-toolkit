@@ -1,7 +1,7 @@
 [project]
-name = "tcl-tv-toolkit"
-version = "0.1.0"
-description = "TCL Android TV toolkit: ADB authorization, sideloading, proxy chain, debloat, HUD, regression tests"
+name = "android-tv-toolkit"
+version = "0.2.0"
+description = "Brand-agnostic Android TV toolkit: ADB authorization, per-brand sideloading, debloat with snapshots, HUD, regression tests"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }

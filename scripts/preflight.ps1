@@ -24,8 +24,13 @@ if (-not $TvIp) { throw "Pass -TvIp <address> or set the TV_IP environment varia
 if (-not (Get-Command adb -ErrorAction SilentlyContinue)) { throw "adb was not found in PATH." }
 
 $root = Split-Path $PSScriptRoot -Parent
+$caller = (Get-Location).Path
 Set-Location $root
-if (-not $OutDir) { $OutDir = Join-Path "backup" (Get-Date -Format "yyyyMMdd-HHmmss") }
+if (-not $OutDir) {
+    $OutDir = Join-Path "backup" (Get-Date -Format "yyyyMMdd-HHmmss")
+} elseif (-not [System.IO.Path]::IsPathRooted($OutDir)) {
+    $OutDir = Join-Path $caller $OutDir
+}
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
 function Sh([string]$cmd) { (& adb shell $cmd 2>&1) -join "`n" }
@@ -44,10 +49,18 @@ Save "settings-global.txt"   (Sh "settings list global")
 Save "settings-secure.txt"   (Sh "settings list secure")
 Save "settings-system.txt"   (Sh "settings list system")
 Save "props.txt"             (Sh "getprop")
-Save "state.txt"             ((Sh "uptime") + "`n--- anim ---`n" +
+$brand = (Sh "getprop ro.product.brand").Trim()
+$model = (Sh "getprop ro.product.model").Trim()
+$release = (Sh "getprop ro.build.version.release").Trim()
+$sdk = (Sh "getprop ro.build.version.sdk").Trim()
+$abi = (Sh "getprop ro.product.cpu.abilist").Trim()
+Save "device.txt"            ("brand=$brand`nmodel=$model`nrelease=$release`nsdk=$sdk`nabi=$abi")
+Save "state.txt"             ((Sh "uptime") + "`n--- device ---`n" +
+    ("brand=$brand model=$model release=$release sdk=$sdk abi=$abi") +
+    "`n--- anim ---`n" +
     (Sh "settings get global window_animation_scale; settings get global transition_animation_scale; settings get global animator_duration_scale") +
     "`n--- screensaver ---`n" + (Sh "settings get secure screensaver_components; settings get secure screensaver_enabled") +
-    "`n--- home ---`n" + (Sh "cmd package query-activities -a android.intent.action.MAIN -c android.intent.category.HOME | grep -E 'name=|packageName=' | head -4"))
+    "`n--- home ---`n" + (Sh "cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME | tail -1"))
 
 Write-Output ""
 Write-Output ("snapshot saved to {0}" -f (Resolve-Path $OutDir))

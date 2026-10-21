@@ -55,13 +55,14 @@ Temperature{mValue=46.0, mType=0, mName=cpu, mStatus=0}
 
 > 早期方案是装 Shizuku 走同样路径；既然本机 adbd 常驻 5555，直接在应用内实现少一个依赖。
 
-### GPU 为什么拿不到
+### GPU：型号可得，占用不可得
 
-- `/sys/class/misc/mali0/device/gpuinfo` → `Permission denied`（shell 也读不到）
+- 型号：**ARM Mali-G52**（AIDA64 2.22 / OpenGL ES 3.2，见 `14-AIDA64硬件信息.md`）
+- 占用：`/sys/class/misc/mali0/device/gpuinfo` → `Permission denied`（shell 也读不到）
 - 没有 `/sys/kernel/ged/...`，没有 GPU `devfreq` 节点
 - `dumpsys gpu` 只有驱动版本
 
-因此面板中 GPU 一栏标注「占用不可读」，不显示假数据。
+因此面板中 GPU 一栏写「Mali-G52 · 占用不可读」，不显示假数据。
 
 ---
 
@@ -88,9 +89,20 @@ Temperature{mValue=46.0, mType=0, mName=cpu, mStatus=0}
 
 ## 4. 时钟屏保
 
-![时钟屏保](images/clock-screensaver.png)
+![时钟屏保](images/clock-weather.png)
 
-大时钟 + 日期 + 天气 + 一行状态，3 分钟无操作进入，按键唤醒；深色、无大图、不烧屏。
+大时钟 + 日期 + 本地天气 + 一行状态，按键唤醒；深色、无大图、不烧屏。
+
+天气数据流：
+
+| 项 | 做法 |
+| --- | --- |
+| 定位 | 手动城市 > `myip.ipip.net`（国内 IP，规则模式下直连）> 系统时区（`Asia/Shanghai` → 上海）；代理把 IP 落到港澳台且时区为国内时忽略 IP 结果 |
+| 天气 | Open-Meteo `current` + `daily`（免 Key）→ 失败退回 wttr.in；WMO/天气码在本地映射为中文 |
+| 缓存 | 30 分钟；刷新失败保留上次成功结果，没有数据时显示「天气 —」 |
+| 城市 | 内置 39 个城市坐标，选择后立即刷新；不依赖地理编码接口 |
+| 刷新 | 屏保启动时检查一次，之后每 5 分钟检查（30 分钟内直接命中缓存） |
+| 网络 | HTTPS，仅 `INTERNET` 权限；无账号、无 Key、不上传位置 |
 
 ```bash
 adb shell settings put secure screensaver_components <PKG>/.ClockDream
@@ -100,6 +112,10 @@ adb shell settings put secure screensaver_enabled 1
 回滚：
 
 ```bash
+# 装之前先记录原值：
+adb shell settings get secure screensaver_components
+
+# 回滚时写回原值；TCL 的出厂组件示例：
 adb shell settings put secure screensaver_components com.tcl.appreciate.art/.service.screensaver.ScreenSaverBootService
 ```
 

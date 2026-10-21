@@ -5,6 +5,7 @@
 
 | # | 章节 | 解决的问题 |
 | --- | --- | --- |
+| 0 | [品牌与机型](brands.md) | 我的品牌怎么开 ADB、走哪条安装通道 |
 | 1 | [环境侦测](#1-环境侦测) | 该装哪个 ABI 的包 |
 | 2 | [局域网发现](#2-局域网发现) | 不知道电视 IP |
 | 3 | [开启 ADB](#3-开启-adb) | 找不到隐藏开关 |
@@ -21,6 +22,10 @@
 ## 1. 环境侦测
 
 ```bash
+adb shell getprop ro.product.brand
+adb shell getprop ro.product.model
+adb shell getprop ro.build.version.release
+adb shell getprop ro.build.version.sdk
 adb shell getprop ro.product.cpu.abilist
 adb shell getprop ro.product.cpu.abilist64
 adb shell getprop ro.zygote
@@ -29,6 +34,8 @@ adb shell uname -m
 
 | 检查项 | 判定依据 |
 | --- | --- |
+| `ro.product.brand` / `model` | 决定 [品牌与机型](brands.md) 里看哪一行 |
+| `ro.build.version.sdk` | 低于 26 时 HUD 悬浮窗 API 不可用 |
 | `abilist64` 为空 | 纯 32 位系统，仅能安装 `armeabi-v7a` 包 |
 | `zygote32` | 32 位进程模型 |
 | `uname -m` 为 `armv8l` | 内核运行于 AArch32 |
@@ -76,12 +83,14 @@ $b   = [Text.Encoding]::ASCII.GetBytes($msg)
 
 ## 3. 开启 ADB
 
-各厂商入口不同，常见两类：
+各厂商入口不同，**完整表（含已验证状态）见 [品牌与机型](brands.md#1-开-adb)**。最常见几类：
 
-| 方式 | 路径 |
+| 品牌 | 路径 |
 | --- | --- |
-| 隐藏开关 | 设置 → 关于本机 → 本机信息 → 遥控器按 上 下 左 右 |
-| 开发者模式 | 设置 → 关于 → 连续点击版本号 |
+| TCL / 雷鸟 | 设置 → 关于 → 本机信息 → 遥控器按 **上 下 左 右** → 「更多」→ ADB |
+| 小米 / Redmi | 设置 → 关于 → 连按 **产品型号** → 开发者模式；设置 → 账号与安全 → ADB 调试 + 安装未知来源 |
+| 索尼 / 多数 Android TV | 设置 → 设备偏好设置 → 关于 → 连按 **内部版本号** 7 次 → 开发者选项 → USB 调试 |
+| 海信 / 创维 / OPPO | 入口差异大，先试「关于页连按版本号」，再看品牌表 |
 
 国行固件的开发者选项可能只有 ADB 一项，无 USB 调试、无授权列表。
 
@@ -139,12 +148,33 @@ uint32 LE 模数长度 | 模数（大端） | uint32 LE 指数 | "host@host\0"
 
 ## 5. 侧载安装
 
+### 5.1 先试通用路径
+
+```bash
+adb install -r app.apk
+```
+
+多数 Android TV / Google TV（索尼、多数盒子、部分小米）到这一步就成功了。
+
+### 5.2 被拦截时：走带界面的安装通道
+
 **现象**
 
 ```
 adb install -r app.apk
 Failure [INSTALL_FAILED_VERIFICATION_FAILURE]
 ```
+
+或：
+
+```
+Failure [INSTALL_FAILED_USER_RESTRICTED]
+```
+
+**定位**
+
+- `VERIFICATION_FAILURE`：校验逻辑在 `system_server`，由厂商定制 PackageManagerService 注入；非交互安装没有 UI 可供用户确认，只能返回失败。
+- `USER_RESTRICTED`：系统不允许当前来源安装，通常是「安装未知来源」开关或安全策略。
 
 调整全局校验开关通常无效（实测这两个键本来就是 0）：
 
@@ -153,29 +183,28 @@ adb shell settings put global verifier_verify_adb_installs 0
 adb shell settings put global package_verifier_enable 0
 ```
 
-**定位**
-
-```
-D OverseasAppConfig: Verifying begin
-D OverseasAppConfig: pkgName = com.example.app
-```
-
-校验逻辑位于 system_server，由厂商定制 PackageManagerService 注入。非交互安装没有 UI
-可供用户确认，只能返回失败。
-
 **解法**
 
 选择一条带界面的安装通道：
 
 ```bash
 adb push app.apk /sdcard/Download/app.apk
-adb shell am start -n com.dangbeimarket/.ui.apkmanager.ApkManagerActivity
+# 然后在电视上打开任意「安装包管理 / 文件管理 / 应用市场」选中它
 ```
 
-也可使用任意具备安装界面的应用市场或文件管理器，由前台应用发起安装，系统弹出确认框。
+| 品牌 | 推荐通道 |
+| --- | --- |
+| TCL / 雷鸟 | **当贝市场 → 安装包管理**（`com.dangbeimarket/.ui.apkmanager.ApkManagerActivity`），或 TCL「多屏互动」推送 |
+| 小米 / Redmi | 先开「安装未知来源的应用」，再试 adb；不行用小米电视助手 / 文件管理器 |
+| 索尼 | 一般不需要通道，`adb install` 即可 |
+| 海信 / VIDDA | U 盘 + 内置文件管理器 / 聚好看 |
+| 创维 / 酷开 | 酷开应用圈 / U 盘安装 |
+| OPPO | 通常 adb 可用；桌面类 App 可能要先改包名/补桌面标记 |
+| 通用 | 任意具备安装界面的应用市场或文件管理器 |
 
-> **升级的代价**：这条路是「先卸载再安装」，应用数据（以及 `appops`、ADB 密钥）会被清掉。
-> 每次升级都要重新授权自启、无障碍等状态，见 [hud-app.md](hud-app.md#安装tcl-国行固件)。
+> **升级的代价（TCL 等走 UI 通道的固件）**：这条路常是「先卸载再安装」，应用数据（以及 `appops`、ADB 密钥）会被清掉。
+> 每次升级都要重新授权自启、无障碍等状态，见 [hud-app.md](hud-app.md)。
+> 其他品牌如果 `adb install -r` 直接可用，就不会有这个问题。
 
 ---
 
@@ -222,8 +251,8 @@ adb shell "am start -a android.intent.action.VIEW -d 'clash://install-config?url
 
 代理 → 策略组 → 选择节点。部分订阅默认指向 `security=none` 的明文节点，当前内核会拒绝连接。
 
-> 代理客户端在 TCL 上默认被拦自启：`appops get com.follow.clash APP_AUTO_START` 显示 `Default mode: ignore`。
-> 想让它在开机后自动连，需要一条 `appops set ... APP_AUTO_START allow`；不需要就别动。
+> 部分国行固件（如 TCL）默认拦第三方自启：`appops get com.follow.clash APP_AUTO_START` 可能显示 `Default mode: ignore`。
+> 想让它在开机后自动连，需要一条 `appops set ... APP_AUTO_START allow`；其他品牌没有这个 op，改查厂商的「自启动管理」。
 
 ---
 
@@ -305,6 +334,9 @@ adb shell "grep -o 'name=\"[^\"]*\"' /vendor/etc/media_codecs.xml"
 | --- | --- | --- |
 | `NO_MATCHING_ABIS` | 系统位数与 APK 不匹配 | 改用 `armeabi-v7a` 包 |
 | `VERIFICATION_FAILURE` | 定制 PMS 拦截非交互安装 | 由应用市场在电视端安装 |
+| `USER_RESTRICTED` | 未允许「安装未知来源」/ 安全策略 | 打开对应开关，或走 UI 安装 |
+| `UPDATE_INCOMPATIBLE` | 新旧 APK 签名不一致 | 先卸载旧版（丢数据），或换同签名包 |
+| `INSUFFICIENT_STORAGE` | 空间不足 | 清理后重试 |
 | `unauthorized` 且无弹窗 | 公钥编码不兼容 | `adb-auth-legacy.py` |
 | 立即 `failed to authenticate` | 私钥缺失或不可读 | 检查 `~/.android/adbkey` |
 | 重启后无法连接 | ADB 开关复位 | 重新开启 |
