@@ -10,7 +10,7 @@ Making a China-market Android TV usable — without root, without flashing, with
 ![License](https://img.shields.io/badge/License-MIT-8E8E93?style=flat-square)
 ![CI](https://github.com/VictorTran1023/tcl-tv-toolkit/actions/workflows/ci.yml/badge.svg)
 
-[中文](README.md) · [English](README.en.md) · [Full handbook](docs/handbook.md) · [Discussions](https://github.com/VictorTran1023/tcl-tv-toolkit/discussions)
+[中文](README.md) · [English](README.en.md) · [Usage guide](docs/usage.md) · [Full handbook](docs/handbook.md) · [Discussions](https://github.com/VictorTran1023/tcl-tv-toolkit/discussions)
 
 </div>
 
@@ -86,6 +86,7 @@ A complete visual proposal for replacing the launcher — Xbox 360 blade styling
 ```
 .
 ├── docs/                 Handbook and deep dives
+│   ├── usage.md          Usage guide (TV side / PC side / delegating to an agent)
 │   ├── handbook.md       Full manual (connect → authorise → sideload → proxy → tune)
 │   ├── t7k-optimization.md   What was changed, with data and rollback
 │   ├── adb-inside-tv.md  ADB from inside the app: how, and its limits
@@ -99,6 +100,8 @@ A complete visual proposal for replacing the launcher — Xbox 360 blade styling
 ```
 
 ## Quick start
+
+New here? Read the [**usage guide**](docs/usage.md) first: 5 steps on the TV, 4 commands on the PC, plus agent prompt templates.
 
 ```bash
 git clone https://github.com/VictorTran1023/tcl-tv-toolkit.git
@@ -132,6 +135,7 @@ A real brick would require writing the bootloader or a system image — out of s
 
 | Document | Contents |
 | --- | --- |
+| [usage.md](docs/usage.md) | **Usage guide**: what to press on the TV, what to type on the PC, how to delegate to an agent |
 | [handbook.md](docs/handbook.md) | Environment, discovery, authorisation, sideload, proxy, YouTube, tuning, failure table |
 | [t7k-optimization.md](docs/t7k-optimization.md) | The optimisation pass: baseline, gates, data, traps |
 | [adb-inside-tv.md](docs/adb-inside-tv.md) | How an app runs ADB against its own device, and why that is safe here |

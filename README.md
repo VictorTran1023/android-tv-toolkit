@@ -10,7 +10,7 @@
 ![License](https://img.shields.io/badge/License-MIT-8E8E93?style=flat-square)
 ![CI](https://github.com/VictorTran1023/tcl-tv-toolkit/actions/workflows/ci.yml/badge.svg)
 
-[中文](README.md) · [English](README.en.md) · [完整手册](docs/handbook.md) · [Discussions](https://github.com/VictorTran1023/tcl-tv-toolkit/discussions)
+[中文](README.md) · [English](README.en.md) · [使用指南](docs/usage.md) · [完整手册](docs/handbook.md) · [Discussions](https://github.com/VictorTran1023/tcl-tv-toolkit/discussions)
 
 </div>
 
@@ -86,6 +86,7 @@
 ```
 .
 ├── docs/                 手册与专题
+│   ├── usage.md          使用指南（电视端 / 电脑端 / 交给 Agent）
 │   ├── handbook.md       完整操作手册（连接 → 授权 → 侧载 → 代理 → 调优）
 │   ├── t7k-optimization.md   T7K 改动全记录（数据、证据、回滚）
 │   ├── adb-inside-tv.md  应用内 ADB：原理、边界、能拿到什么
@@ -99,6 +100,8 @@
 ```
 
 ## 快速开始
+
+第一次接触？先读 [**使用指南**](docs/usage.md)：电视端 5 步、电脑端 4 条命令、以及交给 Agent 的 prompt 模板。
 
 ```bash
 git clone https://github.com/VictorTran1023/tcl-tv-toolkit.git
@@ -132,6 +135,7 @@ powershell -File scripts/restore-all.ps1       # 按快照恢复全部设置
 
 | 文档 | 内容 |
 | --- | --- |
+| [usage.md](docs/usage.md) | **使用指南**：电视怎么按、电脑怎么敲、怎么交给 Agent |
 | [handbook.md](docs/handbook.md) | 完整手册：环境、发现、授权、侧载、代理、YouTube、调优、故障表 |
 | [t7k-optimization.md](docs/t7k-optimization.md) | 优化全过程：基线、闸门、数据、坑 |
 | [adb-inside-tv.md](docs/adb-inside-tv.md) | 应用内 ADB 的原理与安全边界 |
