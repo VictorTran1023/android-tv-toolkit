@@ -1,8 +1,8 @@
 <div align="center">
 
-# TCL TV Debugging & Optimization Handbook
+# TCL TV Debugging & Tuning Handbook
 
-ADB authorization · Sideloading · Proxy · Debloat · Low load · HUD · Regression tests
+Making a China-market Android TV usable — without root, without flashing, with a way back
 
 ![Platform](https://img.shields.io/badge/Android%20TV-9%2B-3DDC84?logo=android&logoColor=white&style=flat-square)
 ![Scope](https://img.shields.io/badge/Scope-China--market%20firmware-F5A623?style=flat-square)
@@ -10,46 +10,93 @@ ADB authorization · Sideloading · Proxy · Debloat · Low load · HUD · Regre
 ![License](https://img.shields.io/badge/License-MIT-8E8E93?style=flat-square)
 ![CI](https://github.com/VictorTran1023/tcl-tv-adb-proxy/actions/workflows/ci.yml/badge.svg)
 
-[English](README.en.md) · [中文](README.md) · [Discussions](https://github.com/VictorTran1023/tcl-tv-adb-proxy/discussions)
+[中文](README.md) · [English](README.en.md) · [Full handbook](docs/handbook.md) · [Discussions](https://github.com/VictorTran1023/tcl-tv-adb-proxy/discussions)
 
 </div>
 
 ---
 
-## Who this is for
+The four walls of a China-market Android TV — **can't connect, can't install, can't play, can't switch off** — are rarely hardware limits. The firmware changes behaviour in four places: ADB key format, a customised PackageManager, no Google services, and preloaded daemons.
 
-- Owners of a **China-market TCL / FFALCON Android TV** with a restricted system
-- Anyone stuck at `adb unauthorized` where the TV **never shows the authorization dialog**
-- People who want to sideload apps and configure a proxy **without root or flashing**
-- Readers who need a **reproducible troubleshooting path**, not scattered commands
-- Owners dealing with ad-heavy home screens, standby heat or battery drain
-- Anyone who wants VPN / CPU / temperature status **without replacing the launcher**
+This repository documents what worked on a **TCL T7K (Android 11 / MT9952 / 3.83 GB)**: every step has a command, a measurement, and a rollback. No root, no flashing, no system partition edits.
 
-## Not covered
+## What you get
 
-| Scope | Note |
-| --- | --- |
-| root / system partition modification / flashing | out of scope |
-| Proxy nodes, accounts, subscriptions | bring your own |
-| Non-Android TV platforms | webOS, Tizen, Roku are not applicable |
+| Wall | Approach | Result |
+| --- | --- | --- |
+| `adb unauthorized`, no prompt on TV | Re-handshake with the **legacy binary key structure** the vendor adbd accepts | Authorise once, then plain `adb` works |
+| `INSTALL_FAILED_VERIFICATION_FAILURE` | Route through an **installer with a UI**, let a foreground app start the session | Any APK sideloads, including your own |
+| No GMS, YouTube won't open | SmartTube + FlClash with deep-link subscription import | Stable 1080p |
+| Ads, heat, background daemons | Tiered `pm disable-user` with a **gated workflow** (snapshot → change → reboot → regress) | CPU 48% → 9%, −10 °C |
+| Want system status without replacing the launcher | A 25 KB native HUD: VPN / CPU / RAM / **real °C** | Overlay strip + clock screensaver |
 
-## Scope
+## Measured results
 
-| Item | Note |
-| --- | --- |
-| OS | Android TV 9 and above |
-| Architecture | 32-bit (`armeabi-v7a`) or 64-bit — verify first |
-| Devices | TCL / FFALCON used as reference; the method applies to most China-market Android TVs |
-| Prerequisite | TV and PC on the same LAN |
+One T7K, same scene before and after (idle home / playing):
 
-Four problem classes and their causes:
+| Metric | Before | After | How |
+| --- | --- | --- | --- |
+| `com.tcl.walleve` (far-field voice) | **53% of one core**, held an `AudioIn` wakelock 24 h | 0 (process gone) | `pm disable-user` |
+| Whole-device CPU | 48% | **9%** | same |
+| Temperature while playing | **87 °C** | 71–77 °C | same |
+| Available RAM | 85 MB | 639 MB | same |
+| Swap used | 508 MB | 133 MB | same |
+| Promo / boot-ad / OTA packages | 8 resident | all disabled, **still disabled after reboot** | `pm disable-user` |
+| Strip temperature | "normal / warm / throttled" only | **real °C** (`dumpsys thermalservice`) | embedded ADB client |
 
-| Symptom | Cause |
-| --- | --- |
-| Cannot connect | public-key encoding incompatible with the vendor adbd |
-| Cannot install | vendor-patched PMS blocks non-interactive installs |
-| Cannot navigate | app UI not designed for a remote |
-| Cannot play | bitrate exceeds available bandwidth |
+One detail that matters: after `pm disable-user`, **wait 60 seconds before rebooting**. PackageManager has not persisted the restriction yet, and a fast reboot silently restores everything. Documented in [docs/t7k-optimization.md](docs/t7k-optimization.md).
+
+## Why the three walls exist
+
+These are firmware behaviours, not wrong commands:
+
+| Symptom | Root cause | Evidence |
+| --- | --- | --- |
+| No authorisation prompt | adb 34+ sends a base64 key blob; the vendor adbd only parses the legacy binary struct | `[AUTH] arg0=3 (len=712)` then rejection |
+| Install always fails | Verification lives inside `system_server`, injected by a custom PMS; non-interactive installs have no UI to confirm | `OverseasAppConfig: Verifying begin` |
+| No temperature | `sysfs_thermal` denies both apps and shell | `cat /sys/class/thermal/*/temp` → `Permission denied` |
+
+The third one has an interesting workaround: [**running ADB inside the TV**](docs/adb-inside-tv.md). The app connects to `127.0.0.1:5555` with its own key and executes read-only shell commands — that is how `cpu = 46.0 °C` from `dumpsys thermalservice` is obtained, with no root.
+
+## The HUD (`hud/`)
+
+![HUD strip](docs/images/hud-strip-1.5.png)
+
+A ~25 KB native app: two rows, fades out after 10 seconds, never takes remote focus.
+
+| Reading | Source | Note |
+| --- | --- | --- |
+| Time / CPU / RAM / throughput | `/proc`, `TrafficStats` | 1 Hz, no network polling |
+| VPN state | `ConnectivityManager` | read-only |
+| **CPU temperature °C** | embedded ADB → `dumpsys thermalservice` | amber ≥60 °C, red ≥72 °C |
+| Clock screensaver | `DreamService` | replaces the vendor art screensaver, one command back |
+
+Not obtainable: GPU utilisation (`mali0/gpuinfo` denies access; no GED/devfreq node).
+
+Build (no Gradle), the only working install path on TCL, and what an upgrade resets: [docs/hud-app.md](docs/hud-app.md).
+
+## Design study: Blade UI
+
+![Blade UI](docs/images/blade-home.png)
+
+A complete visual proposal for replacing the launcher — Xbox 360 blade styling: skewed blade edges, horizontal page sweep, per-blade tint, with an interactive prototype and motion parameters. **Design only, not deployed**: taking over HOME means changing the default launcher, so risks and rollback live in [docs/ui-study.md](docs/ui-study.md).
+
+## Repository layout
+
+```
+.
+├── docs/                 Handbook and deep dives
+│   ├── handbook.md       Full manual (connect → authorise → sideload → proxy → tune)
+│   ├── t7k-optimization.md   What was changed, with data and rollback
+│   ├── adb-inside-tv.md  ADB from inside the app: how, and its limits
+│   ├── hud-app.md        Build, install, upgrade cost
+│   ├── hud-design.md     Strip / screensaver design spec
+│   ├── regression.md     15 automated checks
+│   └── ui-study.md       Blade UI study
+├── hud/                  Native HUD sources (Java, no third-party deps)
+├── scripts/              Python tools and PowerShell gate scripts
+└── .github/workflows/    CI: build APK, self-check scripts
+```
 
 ## Quick start
 
@@ -58,440 +105,46 @@ git clone https://github.com/VictorTran1023/tcl-tv-adb-proxy.git
 cd tcl-tv-adb-proxy
 
 adb connect <TV_IP>:5555
-adb devices -l
-
-python scripts/parse-sub.py "<SUBSCRIPTION_URL>"
-
-# optional: snapshot before tuning, regression after
-powershell -File scripts/preflight.ps1
-powershell -File scripts/regress.ps1
+python scripts/adb-auth-legacy.py --host <TV_IP> --port 5555   # if unauthorized
 ```
 
-## Contents
-
-| # | Section | Scope |
-| --- | --- | --- |
-| 1 | [Environment](#1-environment) | ABI, kernel bitness, decoding capability |
-| 2 | [LAN discovery](#2-lan-discovery) | ARP sweep, SSDP, mDNS |
-| 3 | [Enabling ADB](#3-enabling-adb) | vendor entry paths |
-| 4 | [Authorization](#4-authorization) | legacy public-key handshake |
-| 5 | [Sideloading](#5-sideloading) | bypassing the install verifier |
-| 6 | [Proxy client](#6-proxy-client) | FlClash and subscription import |
-| 7 | [YouTube](#7-youtube) | options without GMS |
-| 8 | [Playback tuning](#8-playback-tuning) | codecs and stutter diagnosis |
-| 9 | [Troubleshooting](#9-troubleshooting) | common failures |
-| 10 | [Scripts](#10-scripts) | four CLI utilities + three PowerShell scripts |
-| 11 | [System tuning](#11-system-tuning) | ads, load, gated rollout |
-| 12 | [Status HUD](#12-status-hud--clock-screensaver) | overlay and screensaver without touching the launcher |
-| 13 | [Regression tests](#13-regression-tests) | 15 automated checks |
-
----
-
-## 1. Environment
-
-```bash
-adb shell getprop ro.product.cpu.abilist
-adb shell getprop ro.product.cpu.abilist64
-adb shell getprop ro.zygote
-adb shell uname -m
-```
-
-| Check | Interpretation |
-| --- | --- |
-| `abilist64` empty | pure 32-bit system; only `armeabi-v7a` APKs install |
-| `zygote32` | 32-bit process model |
-| `uname -m` reports `armv8l` | kernel runs in AArch32 |
-
-APKs shipping only `arm64-v8a` fail with `INSTALL_FAILED_NO_MATCHING_ABIS`.
-
----
-
-## 2. LAN discovery
-
-ICMP is frequently dropped; force ARP resolution over TCP instead:
-
-```powershell
-1..254 | ForEach-Object -Parallel {
-  $ip = "192.168.1.$_"
-  $c = [System.Net.Sockets.TcpClient]::new()
-  try { if ($c.ConnectAsync($ip, 5555).Wait(250) -and $c.Connected) { $ip } }
-  catch {} finally { $c.Dispose() }
-} -ThrottleLimit 128
-
-arp -a | Select-String '192\.168\.1\.'
-```
-
-SSDP exposes the model directly:
-
-```powershell
-$msg = "M-SEARCH * HTTP/1.1`r`nHOST: 239.255.255.250:1900`r`nMAN: `"ssdp:discover`"`r`nMX: 2`r`nST: ssdp:all`r`n`r`n"
-$udp = [System.Net.Sockets.UdpClient]::new()
-$ep  = [System.Net.IPEndPoint]::new([System.Net.IPAddress]::Parse('239.255.255.250'), 1900)
-$b   = [Text.Encoding]::ASCII.GetBytes($msg)
-[void]$udp.Send($b, $b.Length, $ep)
-```
-
-Device identifiers in the UPnP description:
-
-```xml
-<modelName>...</modelName>
-<X_brandName>TCL</X_brandName>
-<channelName>tcl</channelName>
-```
-
-A TXT record `model=AppleTV3,2` on `_airplay._tcp.local` indicates AirPlay 2 support,
-so an iPhone or Mac can cast directly.
-
----
-
-## 3. Enabling ADB
-
-Entry points vary by vendor; two common patterns:
-
-| Pattern | Path |
-| --- | --- |
-| Hidden toggle | Settings → About → Device Info → remote: Up, Down, Left, Right |
-| Developer mode | Settings → About → tap Build Number repeatedly |
-
-China-market firmware may expose only the ADB toggle, with no USB debugging and no
-authorization list.
-
-> The toggle typically resets on every power cycle.
-
-```bash
-adb connect <TV_IP>:5555
-adb devices -l
-```
-
----
-
-## 4. Authorization
-
-**Symptom**
-
-```
-failed to authenticate to <TV_IP>:5555
-<TV_IP>:5555    unauthorized
-```
-
-No authorization dialog appears on the TV.
-
-**Diagnosis**
-
-With adb server tracing enabled:
-
-```
-[AUTH] arg0=1 (len=20)      device challenge
-[AUTH] arg0=2 (len=256)     signature
-[AUTH] arg0=1 (len=20)      rejected
-[AUTH] arg0=3 (len=712)     public key  ← base64 encoded
-```
-
-adb 34+ sends a base64 public key; some vendor adbd implementations only parse the legacy
-binary structure, fail, and reject without prompting.
-
-**Fix**
-
-```bash
-python scripts/adb-auth-legacy.py --host <TV_IP> --port 5555
-```
-
-The script sends the legacy structure and holds the connection open:
-
-```
-uint32 LE modulus length | modulus (big-endian) | uint32 LE exponent | "host@host\0"
-```
-
-Once approved, the key is stored in `adb_keys` and plain adb works thereafter.
-
-> adb requires its private key at `~/.android/adbkey`. If that path is unwritable,
-> adb cannot sign and reports the same error.
-
----
-
-## 5. Sideloading
-
-**Symptom**
-
-```
-adb install -r app.apk
-Failure [INSTALL_FAILED_VERIFICATION_FAILURE]
-```
-
-Global verifier switches usually do not help:
-
-```bash
-adb shell settings put global verifier_verify_adb_installs 0
-adb shell settings put global package_verifier_enable 0
-```
-
-**Diagnosis**
-
-```
-D OverseasAppConfig: Verifying begin
-D OverseasAppConfig: pkgName = com.example.app
-```
-
-The verifier lives in system_server, injected through a vendor-patched
-PackageManagerService. A non-interactive install has no UI for confirmation, so it
-can only fail.
-
-**Fix**
-
-Use an install path that has a UI:
-
-```bash
-adb push app.apk /sdcard/Download/app.apk
-adb shell am start -n com.dangbeimarket/.ui.apkmanager.ApkManagerActivity
-```
-
-Any app market or file manager with an install UI works — the requirement is a
-foreground app initiating the install so the system can show its confirmation dialog.
-
----
-
-## 6. Proxy client
-
-[FlClash](https://github.com/chen08209/FlClash) is an open-source client built on the
-mihomo core. It supports VLESS / VMess / Trojan / Hysteria2 and is fully navigable with
-a TV remote.
-
-| Item | Note |
-| --- | --- |
-| Repository | https://github.com/chen08209/FlClash |
-| Core | mihomo (Clash Meta) |
-| UI | tablet-style sidebar with card lists, D-pad focusable |
-| Subscription | link import with auto-update |
-| License | open source |
-
-**Download**
-
-Pick the build matching the device ABI from [Releases](https://github.com/chen08209/FlClash/releases):
-
-| ABI | File |
-| --- | --- |
-| 32-bit | `FlClash-*-android-armeabi-v7a.apk` |
-| 64-bit | `FlClash-*-android-arm64-v8a.apk` |
-
-| Dashboard | Proxies |
-| --- | --- |
-| ![Dashboard](docs/images/flclash-dashboard.png) | ![Proxies](docs/images/flclash-proxies.png) |
-| Status · outbound mode · service health | Policy groups · node latency |
-
-**Subscription import**
-
-TV input methods tend to convert URLs into Chinese characters, so keyboard entry is
-not viable. Push the deep link instead:
-
-```bash
-URL="https://example.com/link/TOKEN?clash=1"
-ENC=$(python -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$URL")
-adb shell "am start -a android.intent.action.VIEW -d 'clash://install-config?url=$ENC&name=main'"
-```
-
-The URL is stored verbatim, preserving subscription auto-update; file-based imports
-lose that ability.
-
-**Node selection**
-
-Proxies → policy group → node. Some subscriptions default to a `security=none`
-plaintext node, which current cores refuse to use.
-
----
-
-## 7. YouTube
-
-The official client relies on Google Play Services for account and playback
-authorization, so firmware without GMS cannot run it.
-
-Options:
-
-| Option | Note |
-| --- | --- |
-| [SmartTube](https://github.com/yuliskov/SmartTube/releases) | open-source client, no GMS, sign-in and remote support |
-| Web version | best compatibility, limited controls and quality |
-
-SmartTube sign-in: the TV displays an activation code; enter it at
-`youtube.com/activate`.
-
-**Video quality**
-
-```
-Settings → Video → Preferred video quality → 1080p
-```
-
-**Audio**
-
-| Option | Note |
-| --- | --- |
-| `opus` | better quality per bit |
-| `mp4a` | AAC, widest compatibility, fallback for external audio gear |
-| `DRC` | dynamic range compression, useful at night, reduces dynamics |
-| `Disabled` | delegates to the player, may select the DRC variant |
-
----
-
-## 8. Playback tuning
-
-**Enumerate decoders**
-
-```bash
-adb shell "grep -o 'name=\"[^\"]*\"' /vendor/etc/media_codecs.xml"
-```
-
-Common hardware formats: AVC, HEVC, VP8, VP9, AV1, VVC, Dolby Vision, AVS2/AVS3,
-MPEG2, VC1.
-
-> MIME mapping: AV1 is `video/av01`, VP9 is `video/x-vnd.on2.vp9`. Searching for
-> `video/av1` or `video/vp9` misses both.
-
-**Diagnosing stutter**
-
-| Metric | How to observe | Interpretation |
-| --- | --- | --- |
-| Buffer | `buffered` vs `position` in `dumpsys media_session` | equal values mean no look-ahead — bandwidth starvation |
-| Player recreation | `Release` / `Init` frequency in `logcat` | periodic recreation usually means segment load timeouts |
-| Decoder | `OMX.*Decoder` and `output format changed` in `logcat` | confirms hardware decoding and actual resolution |
-| CPU | `ps -A -o RSS,NAME`, `/proc/<pid>/stat` | only a saturated core indicates a decoding bottleneck |
-| GPU | frame timings from `dumpsys gfxinfo <pkg>` | shows whether rendering is the limit |
-
-**Bitrate and bandwidth**
-
-| Resolution | Typical bitrate |
-| --- | --- |
-| 1080p | 1–6 Mbps |
-| 1440p | 8–12 Mbps |
-| 2160p HDR | 20–40 Mbps |
-
-On high-latency paths a single TCP connection is window-limited, so real throughput
-often falls below the node's nominal capacity (BDP limit). Players typically open one
-video and one audio connection, so effective throughput approaches the single-stream
-figure.
-
-**Recommendations**
-
-- Cap the preferred quality at 1080p to leave headroom
-- Rank nodes by single-stream throughput and latency, not by parallel benchmarks
-- If 4K is required, verify sustained single-stream throughput above 20 Mbps
-
----
-
-## 9. Troubleshooting
-
-| Symptom | Cause | Fix |
-| --- | --- | --- |
-| `NO_MATCHING_ABIS` | system bitness vs APK | use an `armeabi-v7a` build |
-| `VERIFICATION_FAILURE` | patched PMS blocks non-interactive installs | install from an app market on the TV |
-| `unauthorized`, no dialog | incompatible key encoding | `adb-auth-legacy.py` |
-| instant `failed to authenticate` | private key missing or unreadable | check `~/.android/adbkey` |
-| unreachable after reboot | ADB toggle reset | re-enable it |
-| URL becomes Chinese text | TV input method prediction | import via deep link |
-| two VPNs conflict | one active VPN allowed | keep a single client |
-| 4K loops on buffering | bandwidth below bitrate | cap at 1080p |
-| AV1/VP9 not found by grep | wrong MIME strings | `video/av01` / `video/x-vnd.on2.vp9` |
-
----
-
-## 10. Scripts
-
-| File | Purpose |
-| --- | --- |
-| [`adb-auth-legacy.py`](scripts/adb-auth-legacy.py) | legacy public-key handshake |
-| [`parse-sub.py`](scripts/parse-sub.py) | subscription parser and plaintext-node detector |
-| [`bench-nodes.py`](scripts/bench-nodes.py) | node throughput benchmark (single / parallel) |
-| [`analyze-apk.py`](scripts/analyze-apk.py) | APK static analysis: ABI, core, TV support |
-| [`preflight.ps1`](scripts/preflight.ps1) | snapshot packages, settings and props before changing anything |
-| [`restore-all.ps1`](scripts/restore-all.ps1) | undo every change using that snapshot |
-| [`regress.ps1`](scripts/regress.ps1) | 15 regression checks with screenshots and PASS/FAIL |
-
-Requires Python 3.9+ and `adb`; benchmarking additionally requires `sing-box`.
-
----
-
-## 11. System tuning
-
-A sluggish China-market TV is usually not short of hardware — it is running preloaded components
-you never asked for. On a TCL T7K (Android 11 / MT5879 / 3.83 GB), a read-only audit found:
-
-**`com.tcl.walleve` (the voice assistant) kept about 53% of one core busy while the launcher sat
-idle**, running far-field wake-word detection (`CAE_LOG` / `IvwPreWakeupCallBack`) and holding an
-`AudioIn` wake lock. After disabling it and rebooting, the launcher, remote, Settings and apps all
-worked; nine minutes later the package was still disabled, CPU dropped from 48% to 9%, and the
-SoC went from 87 °C to 71–77 °C.
-
-| Tier | Targets | Action |
-| --- | --- | --- |
-| A no risk | animation scales | `settings put` to 0.5 |
-| B low risk | boot ad, OTA, promo rows, unused preloads | `pm disable-user`, restore with `install-existing` |
-| C medium | cleaner, short-video, VOD, screensaver | confirm one by one |
-| D never | launcher, Settings, systemserver, factory menu, BT pairing | leave alone |
-
-**Gated rollout**: snapshot → animations → disable → **reboot and verify** → regression. Every
-step is reversible; real bricks require flashing partitions, which this repo never does.
+Snapshot before changing anything, regress afterwards:
 
 ```powershell
 $env:TV_IP = "<TV_IP>"
 .\scripts\preflight.ps1
-adb shell pm disable-user --user 0 com.tcl.walleve
-adb shell reboot
+# …changes…
 .\scripts\regress.ps1
 ```
 
-Full measurements and reproduction commands: **[docs/t7k-optimization.md](docs/t7k-optimization.md)**.
+## Rollback
 
-![Optimization roadmap](docs/images/optimization-roadmap.png)
+Everything is `pm disable-user` / `settings put`, reversible with one command:
 
----
-
-## 12. Status HUD & clock screensaver
-
-Without replacing the launcher or rooting, you can still put a professional status strip on top
-of any picture: VPN node and latency, CPU, temperature, RAM and throughput. It is an overlay app
-(`TYPE_APPLICATION_OVERLAY`) plus a `DreamService` that replaces the ad-filled screensaver.
-
-What is actually readable on Android 11 / MTK:
-
-| Metric | Available | Note |
-| --- | --- | --- |
-| CPU / memory / network / VPN / thermal status | ✅ | system APIs and `/proc` |
-| SoC temperature °C | ⚠️ Shizuku only | `sysfs_thermal` is denied even to shell |
-| GPU utilisation % | ❌ | `mali0/gpuinfo` denied; no GED or devfreq node |
-
-The working implementation lives in [`hud/`](hud): a ~20 KB native app with the status strip, the clock screensaver and a settings screen. It never takes remote focus and hides itself when the panel is off.
-
-Build, the TCL-specific install path (the vendor PMS blocks `adb install`), permissions and rollback: **[docs/hud-app.md](docs/hud-app.md)**.
-
-![Status strip](docs/images/hud-home.png)
-![Clock screensaver](docs/images/hud-clock.png)
-
----
-
-## 13. Regression tests
-
-Run it after every change, reboot or firmware update to prove the everyday paths still work:
-boot, launcher, HOME key, D-pad, Settings, a video app, Wi-Fi, outbound network, critical
-packages, crashes and ANRs.
-
-```powershell
-$env:TV_IP = "<TV_IP>"
-.\scripts\regress.ps1
+```bash
+adb shell pm enable <package>                  # restore one package
+powershell -File scripts/restore-all.ps1       # restore all settings from snapshot
 ```
 
-- 15 checks, roughly 40 seconds, ends on the home screen
-- `0 FAIL` means pass; on failure run `.\scripts\restore-all.ps1` and retest
-- evidence lands in `audit/regress/<timestamp>/`
+A real brick would require writing the bootloader or a system image — out of scope here.
 
-Checklist and the screenshot-diff trick for the remote: **[docs/regression.md](docs/regression.md)**.
+## Documentation
 
----
+| Document | Contents |
+| --- | --- |
+| [handbook.md](docs/handbook.md) | Environment, discovery, authorisation, sideload, proxy, YouTube, tuning, failure table |
+| [t7k-optimization.md](docs/t7k-optimization.md) | The optimisation pass: baseline, gates, data, traps |
+| [adb-inside-tv.md](docs/adb-inside-tv.md) | How an app runs ADB against its own device, and why that is safe here |
+| [hud-app.md](docs/hud-app.md) | Building and installing the HUD (including upgrade cost) |
+| [hud-design.md](docs/hud-design.md) | Strip and screensaver design spec |
+| [regression.md](docs/regression.md) | Checks and pass criteria |
+| [ui-study.md](docs/ui-study.md) | Blade UI visuals and motion parameters |
 
-## Notice
+## Disclaimer
 
-For debugging and study on devices you own. Sideloading and proxy usage are at your own
-risk and subject to local law. No nodes, accounts or subscription links are provided.
+For debugging and learning on devices you own. Sideloading and proxy tooling are your own responsibility, and local law applies.
+No nodes, accounts or subscriptions are provided here.
 
 ## License
 
 [MIT](LICENSE)
-
-

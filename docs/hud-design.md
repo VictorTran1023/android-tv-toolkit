@@ -26,11 +26,11 @@
 | 节点延迟 | ✅ | 定时 TCP/HTTP 探测 | 10 秒一次 |
 | 热状态（正常/降频） | ✅ | `PowerManager.getCurrentThermalStatus()` | 无需权限 |
 | 分辨率 / 刷新率 | ✅ | Display API | 1920×1080@60 |
-| **芯片温度 °C** | ⚠️ 仅 Shizuku | `dumpsys thermalservice` | 见下 |
+| **芯片温度 °C** | ✅ 已实现 | 内置 ADB → `dumpsys thermalservice` | 见下 |
 | **GPU 占用 %** | ❌ | — | 见下 |
 | 全局 FPS | ❌ | — | 只能统计自己窗口 |
 
-### 温度为什么普通 App 拿不到
+### 温度：sysfs 不行，但可以绕
 
 ```
 $ ls -ldZ /sys/class/thermal
@@ -39,11 +39,21 @@ $ adb shell cat /sys/class/thermal/thermal_zone0/temp
 Permission denied
 ```
 
-`sysfs_thermal` 连 adb shell（uid 2000）都拒绝，`untrusted_app` 更不可能。只有 `dumpsys thermalservice`（`DUMP` 权限）能读。
+`sysfs_thermal` 连 adb shell（uid 2000）都拒绝，`untrusted_app` 更不可能。
 
-**可选方案**：装 [Shizuku](https://github.com/RikkaApps/Shizuku)，用 ADB 启动其特权进程，App 通过 Shizuku 执行 `dumpsys thermalservice` 解析温度。代价是每次电视重启后要跑一条 ADB 命令（国行固件关机还会关 ADB）。
+但 `dumpsys thermalservice` 里有：
 
-**不装 Shizuku**：显示「热状态：正常 / 偏热 / 降频」，不伪造具体温度。
+```
+Temperature{mValue=46.0, mType=0, mName=cpu, mStatus=0}
+```
+
+`dumpsys` 需要 `DUMP` 权限——**应用拿不到，shell 身份可以**。所以 HUD 里内置了一个约 200 行的 ADB 客户端，连本机 `127.0.0.1:5555`，以 shell 身份执行这一条只读命令。
+
+- 首次连接需要在电视上「允许 USB 调试」一次（勾选一律允许）；
+- 未授权 / ADB 关闭时静默降级为三档文字，不反复弹窗；
+- 完整原理、安全边界与失败模式见 [adb-inside-tv.md](adb-inside-tv.md)。
+
+> 早期方案是装 Shizuku 走同样路径；既然本机 adbd 常驻 5555，直接在应用内实现少一个依赖。
 
 ### GPU 为什么拿不到
 
