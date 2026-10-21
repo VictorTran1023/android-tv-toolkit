@@ -8,9 +8,9 @@ Making a China-market Android TV usable — without root, without flashing, with
 ![Scope](https://img.shields.io/badge/Scope-China--market%20firmware-F5A623?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white&style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-8E8E93?style=flat-square)
-![CI](https://github.com/VictorTran1023/tcl-tv-adb-proxy/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/VictorTran1023/tcl-tv-toolkit/actions/workflows/ci.yml/badge.svg)
 
-[中文](README.md) · [English](README.en.md) · [Full handbook](docs/handbook.md) · [Discussions](https://github.com/VictorTran1023/tcl-tv-adb-proxy/discussions)
+[中文](README.md) · [English](README.en.md) · [Full handbook](docs/handbook.md) · [Discussions](https://github.com/VictorTran1023/tcl-tv-toolkit/discussions)
 
 </div>
 
@@ -101,8 +101,8 @@ A complete visual proposal for replacing the launcher — Xbox 360 blade styling
 ## Quick start
 
 ```bash
-git clone https://github.com/VictorTran1023/tcl-tv-adb-proxy.git
-cd tcl-tv-adb-proxy
+git clone https://github.com/VictorTran1023/tcl-tv-toolkit.git
+cd tcl-tv-toolkit
 
 adb connect <TV_IP>:5555
 python scripts/adb-auth-legacy.py --host <TV_IP> --port 5555   # if unauthorized

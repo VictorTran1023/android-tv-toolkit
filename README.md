@@ -8,9 +8,9 @@
 ![Scope](https://img.shields.io/badge/Scope-China--market%20firmware-F5A623?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white&style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-8E8E93?style=flat-square)
-![CI](https://github.com/VictorTran1023/tcl-tv-adb-proxy/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/VictorTran1023/tcl-tv-toolkit/actions/workflows/ci.yml/badge.svg)
 
-[中文](README.md) · [English](README.en.md) · [完整手册](docs/handbook.md) · [Discussions](https://github.com/VictorTran1023/tcl-tv-adb-proxy/discussions)
+[中文](README.md) · [English](README.en.md) · [完整手册](docs/handbook.md) · [Discussions](https://github.com/VictorTran1023/tcl-tv-toolkit/discussions)
 
 </div>
 
@@ -101,8 +101,8 @@
 ## 快速开始
 
 ```bash
-git clone https://github.com/VictorTran1023/tcl-tv-adb-proxy.git
-cd tcl-tv-adb-proxy
+git clone https://github.com/VictorTran1023/tcl-tv-toolkit.git
+cd tcl-tv-toolkit
 
 adb connect <TV_IP>:5555
 python scripts/adb-auth-legacy.py --host <TV_IP> --port 5555   # 若 unauthorized
